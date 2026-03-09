@@ -1,6 +1,6 @@
 # Memo Capsule
 
-A local-first tool for saving, browsing, and exporting ChatGPT, Claude, and Gemini chats, with a customizable memo surface for your own notes, book excerpts, and health tips.
+A local-first tool for saving, browsing, and exporting ChatGPT, Claude, and Gemini chats, with a customizable memo surface for a memo, book excerpt, or health tip you provide.
 
 ## What This Does
 
@@ -19,7 +19,7 @@ It currently supports:
 
 - `Save-first workflow` — save the current session first, then browse, then export
 - `In-page archive` — review complete context without immediately creating local files
-- `Memo entry` — collapsed entry can be customized as a personal note, reminder, or short quote
+- `Memo surface` — the collapsed entry can display a memo, a book excerpt, or a health tip you set yourself
 - `Multi-site extraction` — supports `ChatGPT`, `Claude`, and `Gemini`
 - `Markdown-first export` — keeps structure, headings, lists, links, and code blocks whenever possible
 - `Local-only storage` — archive data stays in browser local storage
@@ -31,13 +31,13 @@ It currently supports:
 1. Open `chrome://extensions`
 2. Enable `Developer mode`
 3. Click `Load unpacked`
-4. Select `extension/`
+4. Select the `extension/` folder
 
 ### Tampermonkey
 
 1. Install `Tampermonkey`
 2. Create a new script
-3. Replace the default template with `chat-export.user.js`
+3. Replace the default template with the contents of `chat-export.user.js`
 4. Save and refresh the target chat page
 
 ## Usage
@@ -60,16 +60,16 @@ It currently supports:
 
 The name `Memo Capsule` reflects the two ideas behind the project:
 
-- `Memo` means the content should feel readable and reusable, not like raw scraped text
+- `Memo` means the product is not only an export utility; it also has a small display surface for the extra line you want to keep in view
 - `Capsule` means each saved item is a compact container for context — something small, self-contained, and easy to revisit later
 
-The name is intentionally broader than chat export, because the same interface can later grow into notes, quotes, health tips, or other small knowledge objects.
+The name is broader than chat export because the product is intentionally two-in-one: AI chat archiving on one side, and a small memo surface on the other.
 
 ## Roadmap
 
 - Improve the visual design so the archive feels closer to a reading tool than a utility overlay
 - Add search, filtering, and lightweight tags for saved items
-- Support more memo types beyond AI chat sessions
+- Add preset memo surface modes for memo, book excerpt, and health tip
 - Improve per-site extraction stability as target products change their DOM
 - Explore safer share and import flows without giving up the local-first default
 

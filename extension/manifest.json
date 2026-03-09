@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Memo Capsule",
   "version": "0.3.0",
-  "description": "A local-first tool for saving, browsing, and exporting ChatGPT, Claude, and Gemini chats, with a customizable memo surface for your own notes, book excerpts, and health tips.",
+  "description": "A local-first tool for saving, browsing, and exporting ChatGPT, Claude, and Gemini chats, with a customizable memo surface for a memo, book excerpt, or health tip you provide.",
   "permissions": [
     "activeTab",
     "tabs",

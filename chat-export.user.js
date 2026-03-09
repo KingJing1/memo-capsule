@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         AI Chat Session Exporter
+// @name         Memo Capsule
 // @namespace    https://openai.com/codex
 // @version      0.1.0
 // @description  One-click export for the current ChatGPT, Claude, or Gemini conversation.
