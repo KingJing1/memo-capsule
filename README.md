@@ -1,6 +1,6 @@
 # Memo Capsule
 
-Save, browse, and export chats, notes, quotes, and small pieces of useful context.
+A local-first tool for saving, browsing, and exporting ChatGPT, Claude, and Gemini chats, with a customizable memo surface for your own notes, book excerpts, and health tips.
 
 ## What This Does
 
