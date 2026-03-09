@@ -4,7 +4,9 @@ Save, browse, and export chats, notes, quotes, and small pieces of useful contex
 
 ## What This Does
 
-`Memo Capsule` is a local-first browser tool for capturing a single AI chat session, browsing it as a memo, and exporting it when needed.
+`Memo Capsule` is a local-first browser tool for capturing a single AI chat session, browsing it like a memo, and exporting it when needed.
+
+It is designed for the common case where a full account export is too heavy, but copy-pasting a single useful conversation is too messy.
 
 It currently supports:
 
@@ -54,6 +56,23 @@ It currently supports:
 3. Export as `MD` when you want to preserve structure
 4. Export as `TXT` when you only need plain text
 
+## Why The Name
+
+The name `Memo Capsule` reflects the two ideas behind the project:
+
+- `Memo` means the content should feel readable and reusable, not like raw scraped text
+- `Capsule` means each saved item is a compact container for context — something small, self-contained, and easy to revisit later
+
+The name is intentionally broader than chat export, because the same interface can later grow into notes, quotes, health tips, or other small knowledge objects.
+
+## Roadmap
+
+- Improve the visual design so the archive feels closer to a reading tool than a utility overlay
+- Add search, filtering, and lightweight tags for saved items
+- Support more memo types beyond AI chat sessions
+- Improve per-site extraction stability as target products change their DOM
+- Explore safer share and import flows without giving up the local-first default
+
 ## Architecture
 
 - `extension/content.js` — page extraction, local archive storage, UI rendering
@@ -71,11 +90,17 @@ This keeps the tool usable even when page structure changes across products.
 
 ## Philosophy
 
-- A single session is often more valuable than a full account export
-- Export should happen after review, not before
-- Good capture tools should preserve context, not just raw text
-- Local-first storage is the default unless a network feature is explicitly needed
-- The interface should feel closer to a reading tool than a utility panel
+This project was born from the belief that:
+
+1. A single useful session is often more valuable than a full account export.
+
+2. Export should happen after review, not before.
+
+3. Good capture tools should preserve context, not just raw text.
+
+4. Local-first storage is the default unless a network feature is explicitly needed.
+
+5. A memo tool should feel closer to reading and collecting than to scraping and downloading.
 
 ## Requirements
 
