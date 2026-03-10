@@ -540,22 +540,28 @@
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 4px;
+        gap: 2px;
         color: var(--tm-ink-soft);
-        font-size: 12px;
-        font-weight: 600;
+        font-size: 11px;
+        line-height: 1.45;
+        font-weight: 500;
         font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
+        letter-spacing: -0.01em;
+        opacity: 0.9;
       }
 
       #${PANEL_ID} .tm-credit a {
         color: var(--tm-ink-soft);
-        font-size: 12px;
-        font-weight: 600;
+        font-size: 11px;
+        line-height: 1.45;
+        font-weight: 500;
+        font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
         text-decoration: none;
       }
 
       #${PANEL_ID} .tm-credit a:hover {
-        color: var(--tm-ink);
+        color: var(--tm-ink-soft);
+        opacity: 0.78;
       }
 
       #${PANEL_ID} .tm-drawer {
