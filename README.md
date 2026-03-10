@@ -1,6 +1,6 @@
 # Memo Capsule
 
-A local-first tool for saving, browsing, and exporting AI chats, with a memo area that can show either your own note or a rotating book excerpt or health tip curated by @一龙小包子.
+A local-first tool for saving, browsing, and exporting AI chats, with a memo area that can show either your own note or a rotating book excerpt curated by @一龙小包子.
 
 ## What This Does
 
@@ -19,7 +19,7 @@ It currently supports:
 
 - `Save-first workflow` — save the current session first, then browse, then export
 - `In-page archive` — review complete context without immediately creating local files
-- `Memo surface` — the collapsed entry can display a memo, a book excerpt, or a health tip you set yourself
+- `Memo surface` — the collapsed entry can display a memo or a book excerpt
 - `Multi-site extraction` — supports `ChatGPT`, `Claude`, and `Gemini`
 - `Markdown-first export` — keeps structure, headings, lists, links, and code blocks whenever possible
 - `Local-only storage` — archive data stays in browser local storage
@@ -69,7 +69,7 @@ The name is broader than chat export because the product is intentionally two-in
 
 - Improve the visual design so the archive feels closer to a reading tool than a utility overlay
 - Add search, filtering, and lightweight tags for saved items
-- Add preset memo surface modes for memo, book excerpt, and health tip
+- Add preset memo surface modes for memo and book excerpt
 - Improve per-site extraction stability as target products change their DOM
 - Explore safer share and import flows without giving up the local-first default
 

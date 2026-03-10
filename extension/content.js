@@ -17,13 +17,78 @@
   const STYLE_ID = 'tm-chat-export-style';
   const TOAST_ID = 'tm-chat-export-toast';
   const ARCHIVE_KEY = 'tmChatExportArchive';
+  const NOTE_HISTORY_KEY = 'tmChatExportNoteHistory';
   const PANEL_STATE_KEY = 'tmChatExportPanelState';
   const MAX_ARCHIVE_ITEMS = 40;
+  const MAX_NOTE_ITEMS = 120;
   const ROOT_SELECTOR = 'main, [role="main"]';
+  const CAT_ASSET_PATH = 'assets/cat-save.png';
+  const BOOK_EXCERPT_SAMPLE_RAW = String.raw`《体验引擎：游戏设计全景探秘》
+
+西尔维斯特
+30个笔记
+
+推荐序一
+
+◆ 在线游戏为数亿玩家创造目标、荣耀、交互和情感，它击中了人类幸福的核心，并且将现实世界中匮乏的奖励、挑战和伟大的胜利呈现在我们的面前。
+
+第1章 体验引擎
+
+◆ 如果通过领悟（insight）使得我们在短时间之内将大量的知识融会贯通，那么这就是最佳的学习时机。
+当玩家得到某些新的信息时，如果他突然明白了原有的一些信息的含义，那么他就是有所领悟。
+
+◆ 和计算机对弈并获胜的感觉，和与人对弈并获胜的感觉不尽相同，即便每一步棋都一样。这是因为击败真正的人增加了情感上的社交意义。
+
+第5章 决策
+
+◆ 如果我们希望一个决策有意义，那么它的结果既不能无法预料，也不能无法避免。也就是说，决策的结果必须能够被部分预测。
+
+◆ 如果完全无法预测未来的话，规划和决策就无从谈起了。
+同时，未来也不能完全可预测。完全可预测的未来无法创造出有意义的决策。
+
+第6章 平衡性
+
+◆ 玩家总是在寻找策略退化，但内心却希望找不到这样的策略。
+
+◆ 不要通过反馈来收集建议，而是通过反馈来收集用户体验。
+我们自己可以决定如何对游戏做出修改，然而我们做不到以其他玩家的方式来体验游戏。
+
+第7章 多人游戏
+
+◆ 真正重要的并不是双方火拼时的决策，而是玩家在没有看到敌人时所确定的决策。
+
+第8章 动机和实现
+
+◆ 人类大脑是在缺乏现代游戏概念的环境下进化的，所以大脑并不能分辨出奖励是真实的还是虚拟的。
+
+◆ 外在动机能够扭曲、取代，甚至摧毁内在动机。
+
+◆ 这些游戏不能称之为体验引擎，它们只是令人上瘾的机器而已。
+
+第10章 市场
+
+◆ 没有人只是玩游戏本身，人们是根据他们已经了解的内容来玩游戏的。这就意味着，设计师决不能忽略营销因素。
+
+第11章 规划和迭代
+
+◆ 为什么我们没有从经验中吸取教训呢？因为存在“后见偏差”（hindsight bias）。
+
+第12章 创造知识
+
+◆ 一个利用潜意识沉思的方法是：交替地思考不同的问题。
+
+第15章 动力
+
+◆ 进步原则是一种研究事实，它表明对优秀的内在工作状况贡献最大的是：每天所取得的有规律和可见的进步。
+
+第16章 复杂的决策
+
+◆ 你还可以现在什么都不做，然后花点时间做分析，想一想还有没有别的方法。`;
   const NOISE_SELECTOR = [
     'button',
     'svg',
     'path',
+    'header',
     'style',
     'script',
     'noscript',
@@ -46,15 +111,17 @@
   ].join(', ');
 
   const ROLE_LABELS = {
-    user: 'User',
-    assistant: 'Assistant',
-    system: 'System',
-    tool: 'Tool',
-    conversation: 'Conversation',
+    user: 'YOU',
+    assistant: 'AI',
+    system: 'SYSTEM',
+    tool: 'TOOL',
+    conversation: 'CONVERSATION',
   };
 
   const runtimeState = {
     selectedArchiveId: null,
+    selectedNoteId: null,
+    selectedNoteIds: new Set(),
     currentHref: window.location.href,
     suppressAnchorClickUntil: 0,
   };
@@ -74,6 +141,14 @@
     return { ok: true, filename };
   }
 
+  function getAssetUrl(path) {
+    if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.getURL === 'function') {
+      return chrome.runtime.getURL(path);
+    }
+
+    return path;
+  }
+
   function ensurePanelStyles() {
     if (document.getElementById(STYLE_ID)) {
       return;
@@ -88,7 +163,22 @@
         right: 18px;
         z-index: 2147483647;
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Helvetica Neue", sans-serif;
-        color: #1d1d1f;
+        color: #2f261f;
+        --tm-paper: rgba(248, 239, 227, 0.96);
+        --tm-paper-strong: rgba(253, 247, 239, 0.98);
+        --tm-surface: #fffaf4;
+        --tm-surface-soft: #f5ecdf;
+        --tm-surface-muted: #efe3d4;
+        --tm-ink: #2f261f;
+        --tm-ink-soft: #6f6156;
+        --tm-line: rgba(92, 72, 54, 0.14);
+        --tm-line-strong: rgba(92, 72, 54, 0.2);
+        --tm-shadow: rgba(81, 57, 38, 0.16);
+        --tm-accent: #cc785c;
+        --tm-accent-strong: #b86348;
+        --tm-accent-soft: #f2ddcf;
+        --tm-user: #f6e7db;
+        --tm-assistant: #fffaf4;
       }
 
       #${PANEL_ID}[data-collapsed="true"] .tm-card,
@@ -96,7 +186,19 @@
         display: none;
       }
 
-      #${PANEL_ID}[data-collapsed="false"] .tm-anchor {
+      #${PANEL_ID}[data-collapsed="false"] .tm-anchor-shell {
+        display: none;
+      }
+
+      #${PANEL_ID}[data-anchor-empty="true"] .tm-anchor {
+        display: none;
+      }
+
+      #${PANEL_ID}[data-anchor-empty="true"] .tm-anchor-card {
+        display: none;
+      }
+
+      #${PANEL_ID}[data-anchor-empty="false"] .tm-cat-card {
         display: none;
       }
 
@@ -108,34 +210,176 @@
         display: flex;
       }
 
+      #${PANEL_ID} .tm-anchor-shell {
+        display: flex;
+        align-items: flex-end;
+        gap: 10px;
+        max-width: 238px;
+      }
+
+      #${PANEL_ID} .tm-anchor-card {
+        position: relative;
+        width: min(224px, calc(100vw - 132px));
+      }
+
+      #${PANEL_ID} .tm-cat-card {
+        position: relative;
+        width: 78px;
+        min-width: 78px;
+      }
+
       #${PANEL_ID} .tm-anchor {
-        border: 1px solid rgba(29, 29, 31, 0.08);
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        gap: 4px;
+        border: 1px solid var(--tm-line);
         border-radius: 20px;
-        padding: 12px 14px;
-        min-width: 132px;
-        max-width: 220px;
-        background: rgba(255, 255, 255, 0.92);
-        color: #1d1d1f;
+        padding: 13px 15px 18px;
+        min-width: 164px;
+        width: 100%;
+        background: linear-gradient(180deg, rgba(255, 250, 244, 0.98), rgba(246, 235, 220, 0.96));
+        color: var(--tm-ink);
         cursor: pointer;
-        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.08);
+        box-shadow: 0 14px 40px var(--tm-shadow);
         font-size: 12px;
-        font-weight: 600;
         line-height: 1.45;
         text-align: left;
         letter-spacing: -0.01em;
         backdrop-filter: blur(18px);
-        white-space: pre-wrap;
+      }
+
+      #${PANEL_ID} .tm-anchor-kind,
+      #${PANEL_ID} .tm-anchor-meta {
+        display: block;
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--tm-ink-soft);
+      }
+
+      #${PANEL_ID} .tm-anchor-kind {
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      #${PANEL_ID} .tm-anchor-copy {
+        display: block;
+        font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 1.6;
+        color: var(--tm-ink);
+        margin-top: 4px;
+        padding-right: 24px;
+        white-space: pre-line;
         word-break: break-word;
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #${PANEL_ID} .tm-anchor-meta {
+        margin-top: 8px;
+        padding-right: 26px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #${PANEL_ID} .tm-anchor-badge {
+        position: absolute;
+        right: 12px;
+        bottom: 12px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--tm-accent), var(--tm-accent-strong));
+        color: #fffaf5;
+        box-shadow: 0 10px 20px rgba(184, 99, 72, 0.22);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      #${PANEL_ID} .tm-cat-anchor {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 78px;
+        min-width: 78px;
+        min-height: 92px;
+        padding: 0;
+        border: 1px solid rgba(194, 162, 132, 0.2);
+        border-radius: 24px;
+        background: linear-gradient(180deg, rgba(255, 249, 242, 0.98), rgba(244, 231, 216, 0.98));
+        color: inherit;
+        box-shadow: 0 16px 34px rgba(114, 86, 58, 0.14);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        position: relative;
+        overflow: visible;
+        transition: background 140ms ease, border-color 140ms ease, box-shadow 180ms ease;
+      }
+
+      #${PANEL_ID} .tm-save-glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 66px;
+        height: 82px;
+        transform: translate(-6px, -2px) scale(1);
+        transform-origin: 50% 100%;
+        filter: drop-shadow(0 10px 18px rgba(114, 86, 58, 0.12));
+        transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), filter 180ms ease;
+      }
+
+      #${PANEL_ID} .tm-save-glyph img {
+        display: block;
+        width: 66px;
+        height: 82px;
+        object-fit: contain;
+        user-select: none;
+        pointer-events: none;
+      }
+
+      #${PANEL_ID} .tm-cat-badge {
+        position: absolute;
+        right: 8px;
+        bottom: 10px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--tm-accent), var(--tm-accent-strong));
+        color: #fffaf5;
+        box-shadow: 0 10px 20px rgba(184, 99, 72, 0.22);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: 700;
+        transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
       }
 
       #${PANEL_ID} .tm-card {
         width: 320px;
         padding: 18px;
         border-radius: 28px;
-        background: rgba(255, 255, 255, 0.96);
-        box-shadow: 0 28px 72px rgba(0, 0, 0, 0.12);
+        background: var(--tm-paper-strong);
+        box-shadow: 0 28px 72px rgba(81, 57, 38, 0.16);
         backdrop-filter: blur(18px);
-        border: 1px solid rgba(29, 29, 31, 0.08);
+        border: 1px solid var(--tm-line);
       }
 
       #${PANEL_ID} .tm-card-head,
@@ -150,7 +394,7 @@
       #${PANEL_ID} .tm-drag {
         border: 0;
         background: transparent;
-        color: #86868b;
+        color: var(--tm-ink-soft);
         cursor: grab;
         font-size: 15px;
         padding: 4px 4px 4px 0;
@@ -167,7 +411,8 @@
         font-size: 18px;
         font-weight: 600;
         letter-spacing: -0.02em;
-        color: #1d1d1f;
+        color: var(--tm-ink);
+        font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
       }
 
       #${PANEL_ID} .tm-title span,
@@ -177,7 +422,7 @@
       #${PANEL_ID} .tm-item-meta {
         font-size: 12px;
         line-height: 1.5;
-        color: #6e6e73;
+        color: var(--tm-ink-soft);
       }
 
       #${PANEL_ID} .tm-card-actions,
@@ -204,30 +449,47 @@
         font-size: 12px;
         font-weight: 600;
         white-space: nowrap;
-        transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+        transition: background 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
       }
 
       #${PANEL_ID} button.tm-primary {
-        background: #0071e3;
-        color: #ffffff;
+        background: linear-gradient(180deg, var(--tm-accent), var(--tm-accent-strong));
+        color: #fffaf5;
+        box-shadow: 0 10px 24px rgba(184, 99, 72, 0.18);
       }
 
       #${PANEL_ID} button.tm-secondary {
-        background: #f5f5f7;
-        color: #1d1d1f;
-        border: 1px solid rgba(29, 29, 31, 0.08);
+        background: rgba(255, 250, 244, 0.92);
+        color: var(--tm-ink);
+        border: 1px solid var(--tm-line);
       }
 
       #${PANEL_ID} button.tm-ghost {
         background: transparent;
-        color: #6e6e73;
+        color: var(--tm-ink-soft);
         padding-inline: 8px;
+      }
+
+      #${PANEL_ID} button.tm-primary:hover,
+      #${PANEL_ID} button.tm-secondary:hover,
+      #${PANEL_ID} .tm-anchor:hover,
+      #${PANEL_ID} .tm-item:hover {
+        transform: translateY(-1px);
+      }
+
+      #${PANEL_ID} .tm-cat-anchor:hover .tm-save-glyph {
+        transform: translate(-6px, -2px) scale(1.055);
+      }
+
+      #${PANEL_ID} .tm-anchor-badge:hover,
+      #${PANEL_ID} .tm-cat-badge:hover {
+        transform: translateY(-1px) scale(1.04);
       }
 
       #${PANEL_ID} .tm-note {
         margin-top: 18px;
         padding-top: 16px;
-        border-top: 1px solid rgba(29, 29, 31, 0.08);
+        border-top: 1px solid var(--tm-line);
       }
 
       #${PANEL_ID} .tm-note label {
@@ -235,17 +497,17 @@
         margin-bottom: 8px;
         font-size: 12px;
         font-weight: 600;
-        color: #6e6e73;
+        color: var(--tm-ink-soft);
       }
 
       #${PANEL_ID} .tm-note textarea {
         width: 100%;
         min-height: 72px;
         resize: vertical;
-        border: 1px solid rgba(29, 29, 31, 0.1);
+        border: 1px solid var(--tm-line);
         border-radius: 16px;
-        background: #fbfbfd;
-        color: #1d1d1f;
+        background: var(--tm-surface);
+        color: var(--tm-ink);
         padding: 12px 14px;
         font: inherit;
         font-size: 13px;
@@ -261,10 +523,27 @@
         margin-top: 10px;
       }
 
+      #${PANEL_ID} .tm-note-links {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+
+      #${PANEL_ID} .tm-note-links button {
+        border: 0;
+        background: transparent;
+        color: var(--tm-ink-soft);
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
       #${PANEL_ID} .tm-note-help {
         font-size: 12px;
         line-height: 1.5;
-        color: #86868b;
+        color: var(--tm-ink-soft);
       }
 
       #${PANEL_ID} .tm-credit {
@@ -272,11 +551,11 @@
       }
 
       #${PANEL_ID} .tm-credit a {
-        color: #1d1d1f;
+        color: var(--tm-ink);
         font-size: 12px;
         font-weight: 600;
         text-decoration: none;
-        border-bottom: 1px solid rgba(29, 29, 31, 0.18);
+        border-bottom: 1px solid var(--tm-line-strong);
         padding-bottom: 1px;
       }
 
@@ -288,9 +567,9 @@
         height: min(84vh, 900px);
         border-radius: 32px;
         overflow: hidden;
-        background: rgba(255, 255, 255, 0.98);
-        border: 1px solid rgba(29, 29, 31, 0.08);
-        box-shadow: 0 32px 90px rgba(0, 0, 0, 0.14);
+        background: var(--tm-paper-strong);
+        border: 1px solid var(--tm-line);
+        box-shadow: 0 32px 90px rgba(81, 57, 38, 0.16);
         backdrop-filter: blur(18px);
       }
 
@@ -303,9 +582,9 @@
 
       #${PANEL_ID} .tm-list {
         padding: 20px;
-        border-right: 1px solid rgba(29, 29, 31, 0.08);
+        border-right: 1px solid var(--tm-line);
         overflow: auto;
-        background: #fbfbfd;
+        background: var(--tm-surface-soft);
       }
 
       #${PANEL_ID} .tm-list-body {
@@ -315,32 +594,110 @@
         margin-top: 18px;
       }
 
+      #${PANEL_ID} .tm-drawer-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #${PANEL_ID} .tm-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 999px;
+        background: rgba(255, 250, 244, 0.88);
+        border: 1px solid var(--tm-line);
+      }
+
+      #${PANEL_ID} .tm-tab {
+        border: 0;
+        background: transparent;
+        color: var(--tm-ink-soft);
+        border-radius: 999px;
+        padding: 7px 10px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      #${PANEL_ID} .tm-tab.is-active {
+        background: rgba(204, 120, 92, 0.14);
+        color: var(--tm-ink);
+      }
+
+      #${PANEL_ID} .tm-note-row {
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 8px;
+        align-items: stretch;
+      }
+
+      #${PANEL_ID} .tm-select-toggle {
+        border: 1px solid var(--tm-line);
+        border-radius: 14px;
+        background: rgba(255, 250, 244, 0.88);
+        color: var(--tm-ink-soft);
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      #${PANEL_ID} .tm-select-toggle.is-selected {
+        color: var(--tm-accent-strong);
+        border-color: rgba(204, 120, 92, 0.28);
+        background: rgba(204, 120, 92, 0.12);
+      }
+
+      #${PANEL_ID} .tm-note-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      #${PANEL_ID} .tm-note-edit {
+        width: 100%;
+        min-height: 160px;
+        margin-top: 16px;
+        resize: vertical;
+        border: 1px solid var(--tm-line);
+        border-radius: 18px;
+        background: var(--tm-surface);
+        color: var(--tm-ink);
+        padding: 14px;
+        box-sizing: border-box;
+        font: inherit;
+        font-size: 13px;
+        line-height: 1.68;
+      }
+
       #${PANEL_ID} .tm-item {
         text-align: left;
         padding: 14px;
         border-radius: 20px;
-        background: #ffffff;
+        background: rgba(255, 250, 244, 0.88);
         transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
-        border: 1px solid rgba(29, 29, 31, 0.06);
+        border: 1px solid rgba(92, 72, 54, 0.08);
       }
 
       #${PANEL_ID} .tm-item:hover {
-        transform: translateY(-1px);
-        background: #ffffff;
-        border-color: rgba(0, 113, 227, 0.18);
+        background: rgba(255, 252, 248, 0.98);
+        border-color: rgba(204, 120, 92, 0.24);
       }
 
       #${PANEL_ID} .tm-item.is-active {
-        background: #ffffff;
-        border-color: rgba(0, 113, 227, 0.38);
-        box-shadow: 0 8px 24px rgba(0, 113, 227, 0.08);
+        background: rgba(255, 252, 248, 0.98);
+        border-color: rgba(204, 120, 92, 0.38);
+        box-shadow: 0 10px 28px rgba(184, 99, 72, 0.12);
       }
 
       #${PANEL_ID} .tm-item-title {
         font-size: 14px;
         font-weight: 600;
         line-height: 1.45;
-        color: #1d1d1f;
+        color: var(--tm-ink);
+        font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
       }
 
       #${PANEL_ID} .tm-item-meta {
@@ -351,7 +708,7 @@
         margin-top: 8px;
         font-size: 12px;
         line-height: 1.55;
-        color: #424245;
+        color: rgba(47, 38, 31, 0.84);
         display: -webkit-box;
         -webkit-line-clamp: 3;
         -webkit-box-orient: vertical;
@@ -361,14 +718,14 @@
       #${PANEL_ID} .tm-detail {
         padding: 20px;
         overflow: auto;
-        background: #ffffff;
+        background: var(--tm-surface);
       }
 
       #${PANEL_ID} .tm-detail-card {
         min-height: 100%;
         border-radius: 24px;
-        background: #ffffff;
-        border: 1px solid rgba(29, 29, 31, 0.08);
+        background: rgba(255, 250, 244, 0.94);
+        border: 1px solid var(--tm-line);
         padding: 24px;
       }
 
@@ -382,17 +739,17 @@
       #${PANEL_ID} .tm-message {
         padding: 16px 18px;
         border-radius: 20px;
-        background: #fbfbfd;
-        border: 1px solid rgba(29, 29, 31, 0.06);
+        background: var(--tm-assistant);
+        border: 1px solid rgba(92, 72, 54, 0.08);
       }
 
       #${PANEL_ID} .tm-message[data-role="user"] {
-        background: #f5f9ff;
-        border-color: rgba(0, 113, 227, 0.12);
+        background: var(--tm-user);
+        border-color: rgba(204, 120, 92, 0.16);
       }
 
       #${PANEL_ID} .tm-message[data-role="assistant"] {
-        background: #fbfbfd;
+        background: var(--tm-assistant);
       }
 
       #${PANEL_ID} .tm-message-head {
@@ -401,7 +758,7 @@
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
-        color: #6e6e73;
+        color: var(--tm-ink-soft);
       }
 
       #${PANEL_ID} .tm-message-body {
@@ -409,12 +766,12 @@
         word-break: break-word;
         font-size: 14px;
         line-height: 1.72;
-        color: #1d1d1f;
+        color: var(--tm-ink);
       }
 
       #${PANEL_ID} .tm-message-body code {
         font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-        background: #f2f2f2;
+        background: rgba(111, 97, 86, 0.08);
         padding: 1px 4px;
         border-radius: 6px;
       }
@@ -427,7 +784,7 @@
         #${PANEL_ID} .tm-list {
           max-height: 38vh;
           border-right: 0;
-          border-bottom: 1px solid rgba(29, 29, 31, 0.08);
+          border-bottom: 1px solid var(--tm-line);
         }
       }
     `;
@@ -446,30 +803,53 @@
     panel.dataset.collapsed = 'true';
     panel.dataset.drawerOpen = 'false';
     panel.innerHTML = `
-      <button type="button" class="tm-anchor" data-action="toggle-panel" data-drag-handle="true" title="打开会话归档">Memo</button>
+      <div class="tm-anchor-shell" aria-label="会话归档入口">
+        <div class="tm-anchor-card">
+          <button type="button" class="tm-anchor" data-action="toggle-panel" data-drag-handle="true" title="打开 Memo Capsule">
+            <span class="tm-anchor-kind" data-role="anchor-kind">Memo</span>
+            <span class="tm-anchor-copy" data-role="anchor-label">Memo</span>
+            <span class="tm-anchor-meta" data-role="anchor-meta"></span>
+          </button>
+          <button type="button" class="tm-anchor-badge" data-action="save-current-inline" title="保存当前对话" aria-label="保存当前对话">↓</button>
+        </div>
+        <div class="tm-cat-card">
+          <button type="button" class="tm-cat-anchor" data-action="toggle-panel" data-drag-handle="true" title="打开 Memo Capsule">
+            <span class="tm-save-glyph" aria-hidden="true">
+              <img src="" alt="打开面板的小猫按钮" data-role="cat-image" />
+            </span>
+          </button>
+          <button type="button" class="tm-cat-badge" data-action="save-current-inline" title="保存当前对话" aria-label="保存当前对话">↓</button>
+        </div>
+      </div>
       <section class="tm-card" aria-label="会话归档控制台">
         <div class="tm-card-head">
           <button type="button" class="tm-drag" data-drag-handle="true" title="拖动位置">⋮⋮</button>
           <div class="tm-title">
-            <strong>Session Archive</strong>
-            <span>像备忘录一样收纳每一段上下文</span>
+            <strong>Memo Capsule</strong>
+            <span>保存 AI 对话，随手记点东西，偶尔翻到一句好书摘</span>
           </div>
           <button type="button" class="tm-ghost" data-action="collapse" title="收起">收起</button>
         </div>
         <div class="tm-card-actions">
-          <button type="button" class="tm-primary" data-action="save-current">保存当前</button>
-          <button type="button" class="tm-secondary" data-action="toggle-drawer">打开归档</button>
+          <button type="button" class="tm-primary" data-action="save-current">保存对话</button>
+          <button type="button" class="tm-secondary" data-action="toggle-drawer">历史存档</button>
         </div>
         <div class="tm-note">
-          <label for="${PANEL_ID}-note">缩起时显示的便签</label>
-          <textarea id="${PANEL_ID}-note" data-role="anchor-note-input" placeholder="写一句提醒，或一条鼓励自己的话。"></textarea>
+          <label for="${PANEL_ID}-note">折叠后显示</label>
+          <textarea id="${PANEL_ID}-note" data-role="anchor-note-input" placeholder="随手记一笔，等下要问的、要做的"></textarea>
           <div class="tm-note-actions">
-            <div class="tm-note-help">这段文字会直接显示在缩起入口上，也可以当一句随手备忘。</div>
-            <button type="button" class="tm-secondary" data-action="save-note">更新便签</button>
+            <div class="tm-note-help"></div>
+            <button type="button" class="tm-secondary" data-action="save-note">保存</button>
+          </div>
+          <div class="tm-note-links">
+            <button type="button" data-action="use-random-excerpt">换一条</button>
+            <span style="color:var(--tm-ink-soft);font-size:12px;user-select:none"> · </span>
+            <button type="button" data-action="open-notes">便签记录</button>
           </div>
         </div>
-        <div class="tm-credit">
+        <div class="tm-credit" style="display:flex;align-items:center;justify-content:space-between">
           <a href="https://twitter.com/KingJing001" target="_blank" rel="noopener noreferrer">@一龙小包子</a>
+          <span style="font-size:11px;color:var(--tm-ink-soft);opacity:0.7">仅在你主动保存时获取对话内容</span>
         </div>
       </section>
       <aside class="tm-drawer" aria-label="会话归档">
@@ -477,21 +857,32 @@
           <section class="tm-list">
             <div class="tm-drawer-head">
               <div>
-                <strong>本地归档</strong>
+                <strong data-role="drawer-title">本地归档</strong>
                 <span class="tm-count">0 条</span>
               </div>
-              <button type="button" class="tm-ghost" data-action="close-drawer" title="关闭">关闭</button>
+              <div class="tm-drawer-head-actions">
+                <div class="tm-tabs">
+                  <button type="button" class="tm-tab is-active" data-action="switch-drawer-view" data-view="archive">会话</button>
+                  <button type="button" class="tm-tab" data-action="switch-drawer-view" data-view="notes">便签</button>
+                </div>
+                <button type="button" class="tm-ghost" data-action="close-drawer" title="关闭">关闭</button>
+              </div>
             </div>
             <div class="tm-list-body" data-archive-list="true"></div>
           </section>
           <section class="tm-detail">
             <div class="tm-detail-card" data-archive-detail="true">
-              <div class="tm-empty">还没有保存的会话。先在聊天页点一次“保存当前”。</div>
+              <div class="tm-empty">还没有保存的会话。点一次「保存对话」试试。</div>
             </div>
           </section>
         </div>
       </aside>
     `;
+
+    const catImage = panel.querySelector('[data-role="cat-image"]');
+    if (catImage instanceof HTMLImageElement) {
+      catImage.src = getAssetUrl(CAT_ASSET_PATH);
+    }
 
     panel.addEventListener('click', (event) => {
       handlePanelAction(event, panel);
@@ -520,7 +911,7 @@
   async function hydratePanel(panel) {
     const state = await getPanelState();
     applyPanelState(panel, state);
-    await refreshArchive(panel);
+    await refreshDrawer(panel);
   }
 
   async function handlePanelAction(event, panel) {
@@ -533,6 +924,7 @@
 
     if (action === 'toggle-panel') {
       if (Date.now() < runtimeState.suppressAnchorClickUntil) {
+        event.preventDefault();
         return;
       }
 
@@ -549,10 +941,10 @@
 
     if (action === 'toggle-drawer') {
       const nextOpen = panel.dataset.drawerOpen !== 'true';
-      const state = await setPanelState({ collapsed: false, drawerOpen: nextOpen });
+      const state = await setPanelState({ collapsed: false, drawerOpen: nextOpen, drawerView: 'archive' });
       applyPanelState(panel, state);
       if (nextOpen) {
-        await refreshArchive(panel);
+        await refreshDrawer(panel, { view: 'archive' });
       }
       return;
     }
@@ -567,25 +959,107 @@
       await runButtonAction(actionTarget, async () => {
         const item = await saveCurrentConversation();
         runtimeState.selectedArchiveId = item.id;
-        await refreshArchive(panel, item.id);
-        const state = await setPanelState({ collapsed: false, drawerOpen: true });
+        await refreshDrawer(panel, { view: 'archive', preferredId: item.id });
+        const state = await setPanelState({ collapsed: false, drawerOpen: true, drawerView: 'archive' });
         applyPanelState(panel, state);
       });
       return;
     }
 
+    if (action === 'save-current-inline') {
+      if (Date.now() < runtimeState.suppressAnchorClickUntil) {
+        event.preventDefault();
+        return;
+      }
+
+      await runButtonAction(
+        actionTarget,
+        async () => {
+          const item = await saveCurrentConversation();
+          runtimeState.selectedArchiveId = item.id;
+          await refreshDrawer(panel, { preferredId: item.id });
+        },
+        { pendingText: '…', successText: '✓' },
+      );
+      return;
+    }
+
     if (action === 'save-note') {
       const input = panel.querySelector('[data-role="anchor-note-input"]');
-      const nextText = normalizeText(input && 'value' in input ? input.value : '') || 'Memo';
-      const state = await setPanelState({ anchorText: nextText });
+      const nextText = normalizeText(input && 'value' in input ? input.value : '');
+      if (!nextText) {
+        const state = await setPanelState({
+          anchorText: '',
+          anchorType: '',
+          anchorMeta: '',
+          currentNoteId: null,
+          collapsed: true,
+          drawerOpen: false,
+        });
+        applyPanelState(panel, state);
+        showToast('已清空便签。');
+        return;
+      }
+
+      const item = await createNoteItem({
+        text: nextText,
+        type: 'note',
+        sourceLabel: '手动便签',
+      });
+      runtimeState.selectedNoteId = item.id;
+      const state = await setPanelState({
+        anchorText: item.text,
+        anchorType: item.type,
+        anchorMeta: buildAnchorMeta(item),
+        currentNoteId: item.id,
+        collapsed: true,
+        drawerOpen: false,
+      });
       applyPanelState(panel, state);
-      showToast('已更新缩起便签。');
+      showToast('已更新便签。');
+      return;
+    }
+
+    if (action === 'use-random-excerpt') {
+      const excerpt = pickRandomExcerpt();
+      if (!excerpt) {
+        showToast('书摘还没有准备好。', true);
+        return;
+      }
+
+      const state = await setPanelState({
+        anchorText: excerpt.text,
+        anchorType: 'excerpt',
+        anchorMeta: excerpt.sourceLabel,
+        currentNoteId: null,
+        collapsed: true,
+        drawerOpen: false,
+      });
+      applyPanelState(panel, state);
+      showToast('已切换书摘。');
+      return;
+    }
+
+    if (action === 'open-notes') {
+      const panelState = await getPanelState();
+      runtimeState.selectedNoteId = runtimeState.selectedNoteId || panelState.currentNoteId || null;
+      const state = await setPanelState({ collapsed: false, drawerOpen: true, drawerView: 'notes' });
+      applyPanelState(panel, state);
+      await refreshDrawer(panel, { view: 'notes', preferredId: runtimeState.selectedNoteId });
+      return;
+    }
+
+    if (action === 'switch-drawer-view') {
+      const view = actionTarget.getAttribute('data-view') === 'notes' ? 'notes' : 'archive';
+      const state = await setPanelState({ drawerView: view, drawerOpen: true, collapsed: false });
+      applyPanelState(panel, state);
+      await refreshDrawer(panel, { view });
       return;
     }
 
     if (action === 'archive-select') {
       runtimeState.selectedArchiveId = actionTarget.getAttribute('data-id') || null;
-      await refreshArchive(panel, runtimeState.selectedArchiveId);
+      await refreshDrawer(panel, { view: 'archive', preferredId: runtimeState.selectedArchiveId });
       return;
     }
 
@@ -595,7 +1069,7 @@
       const item = items.find((entry) => entry.id === itemId);
       if (!item) {
         showToast('归档内容不存在，可能已经被删除。', true);
-        await refreshArchive(panel);
+        await refreshDrawer(panel, { view: 'archive' });
         return;
       }
 
@@ -621,22 +1095,142 @@
       if (runtimeState.selectedArchiveId === itemId) {
         runtimeState.selectedArchiveId = nextItems[0] ? nextItems[0].id : null;
       }
-      await refreshArchive(panel, runtimeState.selectedArchiveId);
+      await refreshDrawer(panel, { view: 'archive', preferredId: runtimeState.selectedArchiveId });
       showToast('已删除本地归档。');
+      return;
+    }
+
+    if (action === 'note-select') {
+      runtimeState.selectedNoteId = actionTarget.getAttribute('data-id') || null;
+      await refreshDrawer(panel, { view: 'notes', preferredId: runtimeState.selectedNoteId });
+      return;
+    }
+
+    if (action === 'note-toggle-select') {
+      const itemId = actionTarget.getAttribute('data-id');
+      if (!itemId) {
+        return;
+      }
+
+      if (runtimeState.selectedNoteIds.has(itemId)) {
+        runtimeState.selectedNoteIds.delete(itemId);
+      } else {
+        runtimeState.selectedNoteIds.add(itemId);
+      }
+      await refreshDrawer(panel, { view: 'notes', preferredId: runtimeState.selectedNoteId });
+      return;
+    }
+
+    if (action === 'note-select-all') {
+      const items = await getNoteItems();
+      runtimeState.selectedNoteIds = new Set(items.map((item) => item.id));
+      await refreshDrawer(panel, { view: 'notes', preferredId: runtimeState.selectedNoteId });
+      return;
+    }
+
+    if (action === 'note-clear-selection') {
+      runtimeState.selectedNoteIds = new Set();
+      await refreshDrawer(panel, { view: 'notes', preferredId: runtimeState.selectedNoteId });
+      return;
+    }
+
+    if (action === 'note-export-selected-md' || action === 'note-export-selected-txt') {
+      const items = await getNoteItems();
+      let selectedItems = items.filter((item) => runtimeState.selectedNoteIds.has(item.id));
+      if (!selectedItems.length && runtimeState.selectedNoteId) {
+        selectedItems = items.filter((item) => item.id === runtimeState.selectedNoteId);
+      }
+      if (!selectedItems.length) {
+        showToast('先勾选要导出的便签。', true);
+        return;
+      }
+
+      await runButtonAction(actionTarget, async () => {
+        exportNotes(action === 'note-export-selected-txt' ? 'txt' : 'md', selectedItems);
+      });
+      return;
+    }
+
+    if (action === 'note-save-edit') {
+      const itemId = actionTarget.getAttribute('data-id');
+      const input = panel.querySelector('[data-role="note-edit-input"]');
+      const nextText = normalizeText(input && 'value' in input ? input.value : '');
+      if (!itemId || !nextText) {
+        showToast('便签内容不能为空。', true);
+        return;
+      }
+
+      await updateNoteItem(itemId, { text: nextText });
+      const notes = await getNoteItems();
+      const current = notes.find((item) => item.id === itemId);
+      if (current && (await getPanelState()).currentNoteId === itemId) {
+        const state = await setPanelState({
+          anchorText: current.text,
+          anchorType: current.type,
+          anchorMeta: buildAnchorMeta(current),
+          currentNoteId: current.id,
+        });
+        applyPanelState(panel, state);
+      }
+      await refreshDrawer(panel, { view: 'notes', preferredId: itemId });
+      showToast('已更新便签。');
+      return;
+    }
+
+    if (action === 'note-delete') {
+      const itemId = actionTarget.getAttribute('data-id');
+      if (!itemId) {
+        return;
+      }
+
+      const notes = await getNoteItems();
+      const nextNotes = notes.filter((item) => item.id !== itemId);
+      runtimeState.selectedNoteIds.delete(itemId);
+      if (runtimeState.selectedNoteId === itemId) {
+        runtimeState.selectedNoteId = nextNotes[0] ? nextNotes[0].id : null;
+      }
+      await setNoteItems(nextNotes);
+
+      const panelState = await getPanelState();
+      if (panelState.currentNoteId === itemId) {
+        const state = await setPanelState({
+          anchorText: '',
+          anchorType: '',
+          anchorMeta: '',
+          currentNoteId: null,
+        });
+        applyPanelState(panel, state);
+      }
+
+      await refreshDrawer(panel, { view: 'notes', preferredId: runtimeState.selectedNoteId });
+      showToast('已删除便签。');
     }
   }
 
-  async function runButtonAction(button, action) {
+  async function runButtonAction(button, action, options) {
     const originalText = button.textContent;
+    const pendingText = options && options.pendingText ? options.pendingText : '处理中...';
+    const successText = options && options.successText ? options.successText : '';
+    let success = false;
     button.disabled = true;
-    button.textContent = '处理中...';
+    button.textContent = pendingText;
 
     try {
       await action();
+      success = true;
     } catch (error) {
       showToast(error && error.message ? error.message : '操作失败，请稍后重试。', true);
     } finally {
       button.disabled = false;
+      if (success && successText) {
+        button.textContent = successText;
+        window.clearTimeout(button.__tmTextResetTimer);
+        button.__tmTextResetTimer = window.setTimeout(() => {
+          button.textContent = originalText;
+        }, 1400);
+        return;
+      }
+
       button.textContent = originalText;
     }
   }
@@ -649,6 +1243,34 @@
     await setArchiveItems(nextItems);
     showToast(`已保存到归档：${item.title}`);
     return item;
+  }
+
+  async function refreshDrawer(panel, options) {
+    const state = await getPanelState();
+    const view = options && options.view ? options.view : state.drawerView || 'archive';
+    panel.dataset.drawerView = view;
+    updateDrawerHeader(panel, view);
+
+    if (view === 'notes') {
+      await refreshNotes(panel, options && options.preferredId);
+      return;
+    }
+
+    await refreshArchive(panel, options && options.preferredId);
+  }
+
+  function updateDrawerHeader(panel, view) {
+    const title = panel.querySelector('[data-role="drawer-title"]');
+    const tabs = Array.from(panel.querySelectorAll('.tm-tab'));
+
+    if (title) {
+      title.textContent = view === 'notes' ? '便签记录' : '本地归档';
+    }
+
+    tabs.forEach((tab) => {
+      const active = tab.getAttribute('data-view') === view;
+      tab.classList.toggle('is-active', active);
+    });
   }
 
   async function refreshArchive(panel, preferredId) {
@@ -689,7 +1311,63 @@
 
     const selectedItem = items.find((item) => item.id === selectedId) || null;
     if (detail) {
-      detail.innerHTML = selectedItem ? buildArchiveDetail(selectedItem) : '<div class="tm-empty">选一条归档，在这里看完整上下文。</div>';
+      detail.innerHTML = selectedItem ? buildArchiveDetail(selectedItem) : '<div class="tm-empty">选一条，查看完整对话。</div>';
+    }
+  }
+
+  async function refreshNotes(panel, preferredId) {
+    const items = await getNoteItems();
+    const list = panel.querySelector('[data-archive-list="true"]');
+    const detail = panel.querySelector('[data-archive-detail="true"]');
+    const count = panel.querySelector('.tm-count');
+
+    if (count) {
+      count.textContent = `${items.length} 条`;
+    }
+
+    const selectedId =
+      preferredId ||
+      runtimeState.selectedNoteId ||
+      (items[0] ? items[0].id : null);
+
+    runtimeState.selectedNoteId = selectedId;
+
+    if (list) {
+      if (!items.length) {
+        list.innerHTML = '<div class="tm-empty">还没有便签记录。</div>';
+      } else {
+        list.innerHTML = `
+          <div class="tm-note-toolbar">
+            <button type="button" class="tm-secondary" data-action="note-select-all">全选</button>
+            <button type="button" class="tm-secondary" data-action="note-clear-selection">清空选择</button>
+            <button type="button" class="tm-primary" data-action="note-export-selected-md">导出 MD</button>
+            <button type="button" class="tm-secondary" data-action="note-export-selected-txt">导出 TXT</button>
+          </div>
+          <div class="tm-list-body">
+            ${items
+              .map((item) => {
+                const activeClass = item.id === selectedId ? ' is-active' : '';
+                const selectedClass = runtimeState.selectedNoteIds.has(item.id) ? ' is-selected' : '';
+                return `
+                  <div class="tm-note-row">
+                    <button type="button" class="tm-select-toggle${selectedClass}" data-action="note-toggle-select" data-id="${escapeHtml(item.id)}">${runtimeState.selectedNoteIds.has(item.id) ? '✓' : '○'}</button>
+                    <button type="button" class="tm-item${activeClass}" data-action="note-select" data-id="${escapeHtml(item.id)}">
+                      <div class="tm-item-title">Memo</div>
+                      <div class="tm-item-meta">${escapeHtml(formatTimestamp(item.updatedAt || item.savedAt))}</div>
+                      <div class="tm-item-excerpt">${escapeHtml(item.text || '')}</div>
+                    </button>
+                  </div>
+                `;
+              })
+              .join('')}
+          </div>
+        `;
+      }
+    }
+
+    const selectedItem = items.find((item) => item.id === selectedId) || null;
+    if (detail) {
+      detail.innerHTML = selectedItem ? buildNoteDetail(selectedItem) : '<div class="tm-empty">选一条便签查看详情。</div>';
     }
   }
 
@@ -698,7 +1376,7 @@
     const feed = messages.length
       ? messages
           .map((message) => {
-            const label = ROLE_LABELS[message.role] || 'Assistant';
+            const label = getRoleLabel(message.role, item.bundle);
             return `
               <article class="tm-message" data-role="${escapeHtml(message.role || 'assistant')}">
                 <div class="tm-message-head">${escapeHtml(label)}</div>
@@ -757,6 +1435,24 @@
     return text.slice(0, 160);
   }
 
+  function buildNoteDetail(item) {
+    return `
+      <div class="tm-detail-head">
+        <div>
+          <strong>Memo</strong>
+          <div class="tm-detail-meta">${escapeHtml(item.sourceLabel || '')}</div>
+          <div class="tm-detail-meta">更新于 ${escapeHtml(formatTimestamp(item.updatedAt || item.savedAt))}</div>
+        </div>
+      </div>
+      <textarea class="tm-note-edit" data-role="note-edit-input">${escapeHtml(item.text || '')}</textarea>
+      <div class="tm-detail-actions">
+        <button type="button" class="tm-primary" data-action="note-save-edit" data-id="${escapeHtml(item.id)}">保存修改</button>
+        <button type="button" class="tm-secondary" data-action="note-export-selected-md">导出已选</button>
+        <button type="button" class="tm-ghost" data-action="note-delete" data-id="${escapeHtml(item.id)}">删除</button>
+      </div>
+    `;
+  }
+
   async function getArchiveItems() {
     const items = await readPersistedValue(ARCHIVE_KEY, []);
     return Array.isArray(items) ? items : [];
@@ -766,16 +1462,64 @@
     await writePersistedValue(ARCHIVE_KEY, items);
   }
 
+  async function getNoteItems() {
+    const items = await readPersistedValue(NOTE_HISTORY_KEY, []);
+    return Array.isArray(items) ? items : [];
+  }
+
+  async function setNoteItems(items) {
+    await writePersistedValue(NOTE_HISTORY_KEY, items);
+  }
+
+  async function createNoteItem(payload) {
+    const items = await getNoteItems();
+    const now = new Date().toISOString();
+    const item = {
+      id: `note-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+      text: payload.text,
+      type: payload.type || 'note',
+      sourceLabel: payload.sourceLabel || '手动便签',
+      savedAt: now,
+      updatedAt: now,
+    };
+    await setNoteItems([item, ...items].slice(0, MAX_NOTE_ITEMS));
+    return item;
+  }
+
+  async function updateNoteItem(itemId, patch) {
+    const items = await getNoteItems();
+    const nextItems = items.map((item) =>
+      item.id === itemId
+        ? {
+            ...item,
+            ...patch,
+            updatedAt: new Date().toISOString(),
+          }
+        : item,
+    );
+    await setNoteItems(nextItems);
+  }
+
   async function getPanelState() {
     const value = await readPersistedValue(PANEL_STATE_KEY, {});
-    return {
+    const nextState = {
       collapsed: true,
       drawerOpen: false,
+      drawerView: 'archive',
       top: 112,
       right: 18,
-      anchorText: 'Memo',
+      anchorText: '',
+      anchorType: '',
+      anchorMeta: '',
+      currentNoteId: null,
       ...value,
     };
+
+    if (nextState.anchorText === 'Memo') {
+      nextState.anchorText = '';
+    }
+
+    return nextState;
   }
 
   async function setPanelState(patch) {
@@ -790,18 +1534,53 @@
   function applyPanelState(panel, state) {
     panel.dataset.collapsed = state.collapsed ? 'true' : 'false';
     panel.dataset.drawerOpen = state.drawerOpen ? 'true' : 'false';
+    panel.dataset.drawerView = state.drawerView || 'archive';
+    panel.dataset.anchorEmpty = normalizeText(state.anchorText || '').length > 0 ? 'false' : 'true';
     panel.style.top = `${Math.max(12, Number(state.top) || 112)}px`;
     panel.style.right = `${Math.max(12, Number(state.right) || 18)}px`;
 
     const anchor = panel.querySelector('.tm-anchor');
+    const anchorLabel = panel.querySelector('[data-role="anchor-label"]');
+    const anchorKind = panel.querySelector('[data-role="anchor-kind"]');
+    const anchorMeta = panel.querySelector('[data-role="anchor-meta"]');
+    const catButton = panel.querySelector('.tm-cat-anchor');
+    const saveButton = panel.querySelector('.tm-anchor-badge');
+    const catSaveButton = panel.querySelector('.tm-cat-badge');
+    const nextAnchorText = normalizeText(state.anchorText || '');
+    if (anchorLabel) {
+      anchorLabel.textContent = nextAnchorText;
+      anchorLabel.title = nextAnchorText;
+    }
+    if (anchorKind) {
+      anchorKind.textContent = state.anchorType === 'excerpt' ? '小包子的书摘' : '便签';
+    }
+    if (anchorMeta) {
+      anchorMeta.textContent = normalizeText(state.anchorMeta || '');
+      anchorMeta.title = normalizeText(state.anchorMeta || '');
+    }
     if (anchor) {
-      anchor.textContent = state.anchorText || 'Memo';
-      anchor.title = state.anchorText || 'Memo';
+      anchor.title = nextAnchorText
+        ? `${state.anchorType === 'excerpt' ? '书摘' : '便签'}\n\n${nextAnchorText}`
+        : '打开 Memo Capsule';
+    }
+    if (catButton) {
+      catButton.title = '打开 Memo Capsule';
+      catButton.setAttribute('aria-label', '打开 Memo Capsule');
+    }
+    if (saveButton) {
+      const saveTitle = '保存当前对话';
+      saveButton.title = saveTitle;
+      saveButton.setAttribute('aria-label', saveTitle);
+    }
+    if (catSaveButton) {
+      const saveTitle = '保存当前对话';
+      catSaveButton.title = saveTitle;
+      catSaveButton.setAttribute('aria-label', saveTitle);
     }
 
     const input = panel.querySelector('[data-role="anchor-note-input"]');
-    if (input && 'value' in input && input.value !== (state.anchorText || 'Memo')) {
-      input.value = state.anchorText || 'Memo';
+    if (input && 'value' in input && input.value !== nextAnchorText) {
+      input.value = nextAnchorText;
     }
   }
 
@@ -834,7 +1613,7 @@
 
       const nextTop = Math.max(12, dragState.top + (event.clientY - dragState.startY));
       const nextRight = Math.max(12, dragState.right - (event.clientX - dragState.startX));
-      if (Math.abs(event.clientX - dragState.startX) > 4 || Math.abs(event.clientY - dragState.startY) > 4) {
+      if (Math.abs(event.clientX - dragState.startX) > 6 || Math.abs(event.clientY - dragState.startY) > 6) {
         dragState.moved = true;
       }
       panel.style.top = `${nextTop}px`;
@@ -847,14 +1626,14 @@
       }
 
       const moved = dragState.moved;
+      if (moved) {
+        runtimeState.suppressAnchorClickUntil = Date.now() + 320;
+      }
       await setPanelState({
         top: parseFloat(panel.style.top) || 112,
         right: parseFloat(panel.style.right) || 18,
       });
       dragState = null;
-      if (moved) {
-        runtimeState.suppressAnchorClickUntil = Date.now() + 220;
-      }
     };
 
     panel.addEventListener('pointerup', finishDrag);
@@ -939,9 +1718,9 @@
         maxWidth: '360px',
         padding: '11px 13px',
         borderRadius: '14px',
-        color: '#f8fafc',
-        background: 'rgba(15, 23, 42, 0.94)',
-        boxShadow: '0 16px 40px rgba(15, 23, 42, 0.28)',
+        color: '#fffaf5',
+        background: 'rgba(54, 41, 31, 0.94)',
+        boxShadow: '0 16px 40px rgba(54, 41, 31, 0.24)',
         fontSize: '13px',
         lineHeight: '1.5',
         backdropFilter: 'blur(12px)',
@@ -950,7 +1729,7 @@
     }
 
     toast.textContent = message;
-    toast.style.background = isError ? 'rgba(127, 29, 29, 0.96)' : 'rgba(15, 23, 42, 0.94)';
+    toast.style.background = isError ? 'rgba(133, 73, 56, 0.96)' : 'rgba(54, 41, 31, 0.94)';
     toast.style.display = 'block';
     clearTimeout(showToast.timerId);
     showToast.timerId = window.setTimeout(() => {
@@ -962,6 +1741,7 @@
     const root = document.querySelector(ROOT_SELECTOR) || document.body;
     const messages = extractMessages(root);
     const title = getConversationTitle();
+    const modelLabel = detectCurrentModelLabel();
 
     if (messages.length === 0) {
       const fallbackNode = root.cloneNode(true);
@@ -975,6 +1755,7 @@
         title,
         source: window.location.href,
         site: getSiteName(),
+        modelLabel,
         exportedAt: new Date().toISOString(),
         messages: [{ role: 'conversation', markdown: fallbackText, text: fallbackText }],
       };
@@ -984,6 +1765,7 @@
       title,
       source: window.location.href,
       site: getSiteName(),
+      modelLabel,
       exportedAt: new Date().toISOString(),
       messages,
     };
@@ -1048,15 +1830,20 @@
   }
 
   function extractClaudeMessages(root) {
+    const conversationTitle = getConversationTitle();
     const userNodes = filterTopLevel(
       Array.from(
         root.querySelectorAll(
           '[data-testid="user-message"], [data-testid*="user"], [class*="user-message"], [class*="UserMessage"]',
         ),
       ),
+    ).filter(
+      (node) =>
+        !isLikelyTitleDecorationNode(node, conversationTitle) &&
+        !isLikelyClaudeWorkspaceDecorationNode(node, conversationTitle),
     );
 
-    const assistantNodes = filterClaudeAssistantNodes(root, userNodes);
+    const assistantNodes = filterClaudeAssistantNodes(root, userNodes, conversationTitle);
     const primaryMessages = dedupeMessages(
       sortMessagesByDocumentOrder([
         ...extractFromNodes(userNodes, 'user'),
@@ -1071,7 +1858,7 @@
     const fallbackMessages = dedupeMessages(
       sortMessagesByDocumentOrder([
         ...extractFromNodes(userNodes, 'user'),
-        ...extractClaudeAssistantByCopyButtons(root, userNodes),
+        ...extractClaudeAssistantByCopyButtons(root, userNodes, conversationTitle),
       ]),
     );
 
@@ -1122,6 +1909,10 @@
       }
 
       if (node.closest(`#${PANEL_ID}, #${TOAST_ID}`)) {
+        return false;
+      }
+
+      if (node.closest('header, nav, [role="navigation"]')) {
         return false;
       }
 
@@ -1193,7 +1984,7 @@
     return score;
   }
 
-  function filterClaudeAssistantNodes(root, userNodes) {
+  function filterClaudeAssistantNodes(root, userNodes, conversationTitle) {
     const selector = [
       '[data-testid="assistant-message"]',
       '[data-testid*="assistant"]',
@@ -1209,11 +2000,13 @@
     ].join(', ');
 
     return filterTopLevel(
-      Array.from(root.querySelectorAll(selector)).filter((node) => isLikelyClaudeAssistantNode(node, root, userNodes)),
+      Array.from(root.querySelectorAll(selector)).filter((node) =>
+        isLikelyClaudeAssistantNode(node, root, userNodes, conversationTitle),
+      ),
     );
   }
 
-  function extractClaudeAssistantByCopyButtons(root, userNodes) {
+  function extractClaudeAssistantByCopyButtons(root, userNodes, conversationTitle) {
     const controls = Array.from(root.querySelectorAll('button, [role="button"], [aria-label], [title], [data-testid]')).filter(
       isClaudeCopyControl,
     );
@@ -1222,7 +2015,7 @@
     const seen = new Set();
 
     controls.forEach((control) => {
-      const container = findClaudeAssistantContainerFromAction(control, root, userNodes);
+      const container = findClaudeAssistantContainerFromAction(control, root, userNodes, conversationTitle);
       if (container && !seen.has(container)) {
         seen.add(container);
         containers.push(container);
@@ -1237,12 +2030,12 @@
     return bits.includes('copy');
   }
 
-  function findClaudeAssistantContainerFromAction(node, root, userNodes) {
+  function findClaudeAssistantContainerFromAction(node, root, userNodes, conversationTitle) {
     let current = node instanceof Element ? node : null;
     let depth = 0;
 
     while (current && current !== root && current !== document.body && depth < 12) {
-      if (isLikelyClaudeAssistantNode(current, root, userNodes)) {
+      if (isLikelyClaudeAssistantNode(current, root, userNodes, conversationTitle)) {
         return current;
       }
 
@@ -1253,7 +2046,7 @@
     return null;
   }
 
-  function isLikelyClaudeAssistantNode(node, root, userNodes) {
+  function isLikelyClaudeAssistantNode(node, root, userNodes, conversationTitle) {
     if (!(node instanceof Element)) {
       return false;
     }
@@ -1268,6 +2061,10 @@
     }
 
     if (userNodes.some((userNode) => userNode === node || userNode.contains(node) || node.contains(userNode))) {
+      return false;
+    }
+
+    if (isLikelyClaudeWorkspaceDecorationNode(node, conversationTitle)) {
       return false;
     }
 
@@ -1299,6 +2096,9 @@
 
     const clone = node.cloneNode(true);
     pruneNoise(clone);
+    if (window.location.hostname.includes('claude.ai')) {
+      pruneClaudeWorkspaceDecorations(clone, getConversationTitle());
+    }
     transformContent(clone);
     return normalizeMarkdown(clone.textContent || '');
   }
@@ -1319,6 +2119,14 @@
       }
 
       if (text.length <= 40 && isControlLabel(text)) {
+        element.remove();
+      }
+    });
+  }
+
+  function pruneClaudeWorkspaceDecorations(root, title) {
+    Array.from(root.querySelectorAll('*')).forEach((element) => {
+      if (isLikelyClaudeWorkspaceDecorationNode(element, title)) {
         element.remove();
       }
     });
@@ -1545,6 +2353,70 @@
     return 'assistant';
   }
 
+  function getRoleLabel(role, bundle) {
+    const normalizedRole = normalizeRole(role);
+    if (normalizedRole === 'assistant') {
+      return bundle && bundle.modelLabel ? bundle.modelLabel : ROLE_LABELS.assistant;
+    }
+
+    return ROLE_LABELS[normalizedRole] || ROLE_LABELS.assistant;
+  }
+
+  function isLikelyTitleDecorationNode(node, title) {
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
+    const normalizedTitle = normalizeText(title || '');
+    const text = normalizeText(node.textContent || '');
+
+    if (!normalizedTitle || !text || text !== normalizedTitle || text.length > 120) {
+      return false;
+    }
+
+    return !node.querySelector('p, pre, code, table, ul, ol, blockquote');
+  }
+
+  function isLikelyClaudeWorkspaceDecorationNode(node, title) {
+    if (!(node instanceof Element)) {
+      return false;
+    }
+
+    const bits = getNodeDetectionBits(node);
+    const looksWorkspaceish =
+      bits.includes('artifact') ||
+      bits.includes('project') ||
+      bits.includes('workbench') ||
+      bits.includes('canvas') ||
+      bits.includes('sidebar') ||
+      bits.includes('drawer') ||
+      bits.includes('sheet');
+
+    if (!looksWorkspaceish) {
+      return false;
+    }
+
+    const text = normalizeText(node.textContent || '');
+    const normalizedTitle = normalizeText(title || '');
+    if (!text) {
+      return false;
+    }
+
+    if (normalizedTitle && text === normalizedTitle) {
+      return true;
+    }
+
+    if (text.length > 64 || /[。！？!?：:；;]/.test(text) || text.includes('\n')) {
+      return false;
+    }
+
+    if (node.querySelector('p, pre, code, table, ul, ol, blockquote')) {
+      return false;
+    }
+
+    return text.split(/\s+/).filter(Boolean).length <= 8;
+  }
+
   function getConversationTitle() {
     const heading = document.querySelector('main h1, main h2');
     const rawTitle = normalizeText((heading && heading.innerText) || document.title || 'chat-session');
@@ -1567,6 +2439,226 @@
     return host;
   }
 
+  function detectCurrentModelLabel() {
+    const host = window.location.hostname;
+    const candidates = collectModelCandidates();
+
+    if (host.includes('claude.ai')) {
+      return detectClaudeModelLabel(candidates) || 'AI';
+    }
+
+    if (host.includes('chatgpt.com') || host.includes('openai.com')) {
+      return detectChatGPTModelLabel(candidates) || 'AI';
+    }
+
+    if (host.includes('gemini.google.com')) {
+      return detectGeminiModelLabel(candidates) || 'AI';
+    }
+
+    return 'AI';
+  }
+
+  function collectModelCandidates() {
+    const selector = [
+      'header button',
+      'header [role="button"]',
+      'nav button',
+      'nav [role="button"]',
+      '[data-testid*="model"]',
+      '[aria-label*="model"]',
+      '[title*="model"]',
+      '[class*="model"]',
+    ].join(', ');
+
+    const values = new Set();
+    values.add(normalizeText(document.title || ''));
+
+    Array.from(document.querySelectorAll(selector))
+      .slice(0, 80)
+      .forEach((node) => {
+        const text = normalizeText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '');
+        if (text && text.length <= 80) {
+          values.add(text);
+        }
+      });
+
+    return Array.from(values).filter(Boolean);
+  }
+
+  function detectChatGPTModelLabel(candidates) {
+    for (const text of candidates) {
+      const match = text.match(/\b(gpt)[-\s]?((?:\d+(?:\.\d+){0,2}|4o|4\.1|5(?:\.\d+){0,2}|o1|o3|o4)(?:\s*(?:mini|nano|pro|thinking|preview|high|low))?)\b/i);
+      if (match) {
+        return `GPT ${normalizeText(match[2]).replace(/-/g, ' ')}`;
+      }
+    }
+
+    return '';
+  }
+
+  function detectClaudeModelLabel(candidates) {
+    for (const text of candidates) {
+      const match = text.match(/\b(?:claude\s+)?((?:opus|sonnet|haiku)\s*\d+(?:\.\d+){0,2})\b/i);
+      if (match) {
+        return titleCaseWords(normalizeText(match[1]));
+      }
+    }
+
+    return '';
+  }
+
+  function detectGeminiModelLabel(candidates) {
+    for (const text of candidates) {
+      const modelMatch = text.match(/\b(\d+(?:\.\d+){0,2}\s*(?:pro|flash))\b/i);
+      if (modelMatch) {
+        return `Gemini ${titleCaseWords(normalizeText(modelMatch[1]))}`;
+      }
+
+      if (/\bgemini\b/i.test(text)) {
+        const variantMatch = text.match(/\bgemini\s+([a-z0-9.\s-]{1,24})\b/i);
+        if (variantMatch) {
+          return `Gemini ${titleCaseWords(normalizeText(variantMatch[1]).replace(/\s+model$/i, ''))}`;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  function titleCaseWords(value) {
+    return normalizeText(value)
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  function buildAnchorMeta(item) {
+    if (!item) {
+      return '';
+    }
+
+    return formatTimestamp(item.updatedAt || item.savedAt);
+  }
+
+  function getExcerptPool() {
+    if (!getExcerptPool.cache) {
+      getExcerptPool.cache = parseWereadHighlights(BOOK_EXCERPT_SAMPLE_RAW);
+    }
+
+    return getExcerptPool.cache;
+  }
+
+  function pickRandomExcerpt() {
+    const pool = getExcerptPool();
+    if (!pool.length) {
+      return null;
+    }
+
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function parseWereadHighlights(raw) {
+    const lines = String(raw || '').split(/\r?\n/);
+    const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
+    const book = nonEmpty[0] || '未命名书摘';
+    const author = nonEmpty[1] && !/个笔记/.test(nonEmpty[1]) ? nonEmpty[1] : '';
+    const items = [];
+    let section = '';
+    let current = null;
+
+    const pushCurrent = () => {
+      if (!current) {
+        return;
+      }
+
+      const text = current.parts
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+      if (text) {
+        items.push({
+          text,
+          sourceLabel: [compactBookTitle(book), current.section].filter(Boolean).join(' · '),
+        });
+      }
+
+      current = null;
+    };
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (current && current.parts[current.parts.length - 1] !== '') {
+          current.parts.push('');
+        }
+        return;
+      }
+
+      if (/^--\s*来自微信读书/.test(trimmed) || /^\d+个笔记$/.test(trimmed) || trimmed === book || trimmed === author) {
+        return;
+      }
+
+      if (/^(推荐序|第.+章)/.test(trimmed)) {
+        pushCurrent();
+        section = trimmed;
+        return;
+      }
+
+      if (/^◆\s*/.test(trimmed)) {
+        pushCurrent();
+        current = {
+          section,
+          parts: [trimmed.replace(/^◆\s*/, '').trim()],
+        };
+        return;
+      }
+
+      if (current) {
+        current.parts.push(trimmed);
+      }
+    });
+
+    pushCurrent();
+    return items;
+  }
+
+  function compactBookTitle(value) {
+    const title = String(value || '').replace(/[《》]/g, '');
+    const shortTitle = title.split('：')[0] || title;
+    return shortTitle ? `《${shortTitle}》` : '';
+  }
+
+  function exportNotes(format, items) {
+    const content = format === 'txt' ? buildNotesText(items) : buildNotesMarkdown(items);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    downloadFile(`memo-notes-${stamp}.${format === 'txt' ? 'txt' : 'md'}`, content);
+    showToast(`已导出 ${items.length} 条便签。`);
+  }
+
+  function buildNotesMarkdown(items) {
+    const header = ['# Memo Notes', '', `- Exported: ${new Date().toISOString()}`, ''].join('\n');
+    const body = items
+      .map((item) => {
+        const meta = [item.sourceLabel || '', formatTimestamp(item.updatedAt || item.savedAt)].filter(Boolean).join(' · ');
+        return `## Memo\n\n- ${meta}\n\n${item.text}`;
+      })
+      .join('\n\n');
+    return `${header}${body}\n`;
+  }
+
+  function buildNotesText(items) {
+    const header = ['Memo Notes', `Exported: ${new Date().toISOString()}`, ''].join('\n');
+    const body = items
+      .map((item) => {
+        const meta = [item.sourceLabel || '', formatTimestamp(item.updatedAt || item.savedAt)].filter(Boolean).join(' · ');
+        return `[Memo] ${meta}\n${item.text}`;
+      })
+      .join('\n\n');
+    return `${header}${body}\n`;
+  }
+
   function buildMarkdown(bundle) {
     const header = [
       `# ${bundle.title}`,
@@ -1579,7 +2671,7 @@
 
     const body = bundle.messages
       .map((message) => {
-        const label = ROLE_LABELS[message.role] || 'Assistant';
+        const label = getRoleLabel(message.role, bundle);
         return `## ${label}\n\n${message.markdown}`;
       })
       .join('\n\n');
@@ -1598,7 +2690,7 @@
 
     const body = bundle.messages
       .map((message) => {
-        const label = ROLE_LABELS[message.role] || 'Assistant';
+        const label = getRoleLabel(message.role, bundle);
         return `[${label}]\n${message.text}`;
       })
       .join('\n\n');
@@ -1700,7 +2792,7 @@
         message.type === 'SAVE_CURRENT_CONVERSATION'
           ? saveCurrentConversation().then(async (item) => {
               runtimeState.selectedArchiveId = item.id;
-              await refreshArchive(panel, item.id);
+              await refreshDrawer(panel, { preferredId: item.id });
               return { ok: true, saved: true, id: item.id, title: item.title };
             })
           : exportConversation(message.format);
