@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Memo Capsule
 // @namespace    https://openai.com/codex
-// @version      0.1.0
-// @description  One-click export for the current ChatGPT, Claude, or Gemini conversation.
+// @version      0.4.2
+// @description  Save AI chats, keep a quick note, and browse curated excerpts.
 // @match        https://chatgpt.com/*
 // @match        https://chat.openai.com/*
 // @match        https://claude.ai/*
@@ -19,71 +19,13 @@
   const ARCHIVE_KEY = 'tmChatExportArchive';
   const NOTE_HISTORY_KEY = 'tmChatExportNoteHistory';
   const PANEL_STATE_KEY = 'tmChatExportPanelState';
-  const MAX_ARCHIVE_ITEMS = 40;
-  const MAX_NOTE_ITEMS = 120;
+  const MAX_ARCHIVE_ITEMS = 100;
+  const MAX_NOTE_ITEMS = 100;
+  const STORAGE_WARNING_THRESHOLD = 80;
   const ROOT_SELECTOR = 'main, [role="main"]';
   const CAT_ASSET_PATH = 'assets/cat-save.png';
-  const BOOK_EXCERPT_SAMPLE_RAW = String.raw`《体验引擎：游戏设计全景探秘》
-
-西尔维斯特
-30个笔记
-
-推荐序一
-
-◆ 在线游戏为数亿玩家创造目标、荣耀、交互和情感，它击中了人类幸福的核心，并且将现实世界中匮乏的奖励、挑战和伟大的胜利呈现在我们的面前。
-
-第1章 体验引擎
-
-◆ 如果通过领悟（insight）使得我们在短时间之内将大量的知识融会贯通，那么这就是最佳的学习时机。
-当玩家得到某些新的信息时，如果他突然明白了原有的一些信息的含义，那么他就是有所领悟。
-
-◆ 和计算机对弈并获胜的感觉，和与人对弈并获胜的感觉不尽相同，即便每一步棋都一样。这是因为击败真正的人增加了情感上的社交意义。
-
-第5章 决策
-
-◆ 如果我们希望一个决策有意义，那么它的结果既不能无法预料，也不能无法避免。也就是说，决策的结果必须能够被部分预测。
-
-◆ 如果完全无法预测未来的话，规划和决策就无从谈起了。
-同时，未来也不能完全可预测。完全可预测的未来无法创造出有意义的决策。
-
-第6章 平衡性
-
-◆ 玩家总是在寻找策略退化，但内心却希望找不到这样的策略。
-
-◆ 不要通过反馈来收集建议，而是通过反馈来收集用户体验。
-我们自己可以决定如何对游戏做出修改，然而我们做不到以其他玩家的方式来体验游戏。
-
-第7章 多人游戏
-
-◆ 真正重要的并不是双方火拼时的决策，而是玩家在没有看到敌人时所确定的决策。
-
-第8章 动机和实现
-
-◆ 人类大脑是在缺乏现代游戏概念的环境下进化的，所以大脑并不能分辨出奖励是真实的还是虚拟的。
-
-◆ 外在动机能够扭曲、取代，甚至摧毁内在动机。
-
-◆ 这些游戏不能称之为体验引擎，它们只是令人上瘾的机器而已。
-
-第10章 市场
-
-◆ 没有人只是玩游戏本身，人们是根据他们已经了解的内容来玩游戏的。这就意味着，设计师决不能忽略营销因素。
-
-第11章 规划和迭代
-
-◆ 为什么我们没有从经验中吸取教训呢？因为存在“后见偏差”（hindsight bias）。
-
-第12章 创造知识
-
-◆ 一个利用潜意识沉思的方法是：交替地思考不同的问题。
-
-第15章 动力
-
-◆ 进步原则是一种研究事实，它表明对优秀的内在工作状况贡献最大的是：每天所取得的有规律和可见的进步。
-
-第16章 复杂的决策
-
-◆ 你还可以现在什么都不做，然后花点时间做分析，想一想还有没有别的方法。`;
+  const EXCERPT_DATA_KEY = '__MEMO_CAPSULE_EXCERPTS__';
+  const EXCERPT_LABEL = '书摘 · @一龙小包子';
   const NOISE_SELECTOR = [
     'button',
     'svg',
@@ -202,6 +144,10 @@
         display: none;
       }
 
+      #${PANEL_ID}[data-anchor-type="excerpt"] .tm-anchor-refresh {
+        display: inline-flex;
+      }
+
       #${PANEL_ID}[data-drawer-open="false"] .tm-drawer {
         display: none;
       }
@@ -214,12 +160,12 @@
         display: flex;
         align-items: flex-end;
         gap: 10px;
-        max-width: 238px;
+        max-width: 286px;
       }
 
       #${PANEL_ID} .tm-anchor-card {
         position: relative;
-        width: min(224px, calc(100vw - 132px));
+        width: min(268px, calc(100vw - 110px));
       }
 
       #${PANEL_ID} .tm-cat-card {
@@ -235,7 +181,7 @@
         gap: 4px;
         border: 1px solid var(--tm-line);
         border-radius: 20px;
-        padding: 13px 15px 18px;
+        padding: 13px 14px 34px;
         min-width: 164px;
         width: 100%;
         background: linear-gradient(180deg, rgba(255, 250, 244, 0.98), rgba(246, 235, 220, 0.96));
@@ -270,30 +216,22 @@
         line-height: 1.6;
         color: var(--tm-ink);
         margin-top: 4px;
-        padding-right: 24px;
+        padding-right: 14px;
         white-space: pre-line;
         word-break: break-word;
-        display: -webkit-box;
-        -webkit-line-clamp: 4;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow: visible;
       }
 
       #${PANEL_ID} .tm-anchor-meta {
-        margin-top: 8px;
-        padding-right: 26px;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        margin-top: 10px;
+        padding-right: 14px;
+        overflow: visible;
       }
 
       #${PANEL_ID} .tm-anchor-badge {
         position: absolute;
         right: 12px;
-        bottom: 12px;
+        bottom: 6px;
         width: 28px;
         height: 28px;
         border: 0;
@@ -309,13 +247,32 @@
         font-weight: 700;
       }
 
+      #${PANEL_ID} .tm-anchor-refresh {
+        display: none;
+        position: absolute;
+        right: 46px;
+        bottom: 6px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--tm-accent), var(--tm-accent-strong));
+        color: #fffaf5;
+        box-shadow: 0 10px 20px rgba(184, 99, 72, 0.22);
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
       #${PANEL_ID} .tm-cat-anchor {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width: 78px;
         min-width: 78px;
-        min-height: 92px;
+        min-height: 96px;
         padding: 0;
         border: 1px solid rgba(194, 162, 132, 0.2);
         border-radius: 24px;
@@ -337,10 +294,10 @@
         justify-content: center;
         width: 66px;
         height: 82px;
-        transform: translate(-6px, -2px) scale(1);
+        transform: translate(-4px, -2px) scale(1);
         transform-origin: 50% 100%;
         filter: drop-shadow(0 10px 18px rgba(114, 86, 58, 0.12));
-        transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), filter 180ms ease;
+        transition: transform 220ms cubic-bezier(0.2, 0.9, 0.2, 1), filter 220ms ease;
       }
 
       #${PANEL_ID} .tm-save-glyph img {
@@ -355,7 +312,7 @@
       #${PANEL_ID} .tm-cat-badge {
         position: absolute;
         right: 8px;
-        bottom: 10px;
+        bottom: 4px;
         width: 28px;
         height: 28px;
         border: 0;
@@ -425,6 +382,30 @@
         color: var(--tm-ink-soft);
       }
 
+      #${PANEL_ID} .tm-title-editor {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #${PANEL_ID} .tm-title-input {
+        width: min(320px, 100%);
+        border: 1px solid var(--tm-line);
+        border-radius: 12px;
+        padding: 9px 12px;
+        background: rgba(255, 250, 244, 0.92);
+        color: var(--tm-ink);
+        font: inherit;
+        font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
+        font-size: 15px;
+      }
+
+      #${PANEL_ID} .tm-title-input:focus {
+        outline: none;
+        border-color: rgba(204, 120, 92, 0.56);
+        box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.12);
+      }
+
       #${PANEL_ID} .tm-card-actions,
       #${PANEL_ID} .tm-detail-actions {
         display: flex;
@@ -478,9 +459,11 @@
       }
 
       #${PANEL_ID} .tm-cat-anchor:hover .tm-save-glyph {
-        transform: translate(-6px, -2px) scale(1.055);
+        transform: translate(-4px, -2px) scale(1.11);
+        filter: drop-shadow(0 14px 22px rgba(114, 86, 58, 0.16));
       }
 
+      #${PANEL_ID} .tm-anchor-refresh:hover,
       #${PANEL_ID} .tm-anchor-badge:hover,
       #${PANEL_ID} .tm-cat-badge:hover {
         transform: translateY(-1px) scale(1.04);
@@ -515,19 +498,16 @@
         box-sizing: border-box;
       }
 
-      #${PANEL_ID} .tm-note-actions {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        margin-top: 10px;
-      }
-
       #${PANEL_ID} .tm-note-links {
         display: flex;
+        align-items: center;
         gap: 8px;
         margin-top: 10px;
         flex-wrap: wrap;
+      }
+
+      #${PANEL_ID} .tm-note-links .tm-note-spacer {
+        margin-left: auto;
       }
 
       #${PANEL_ID} .tm-note-links button {
@@ -547,16 +527,35 @@
       }
 
       #${PANEL_ID} .tm-credit {
-        margin-top: 16px;
+        margin-top: 12px;
+      }
+
+      #${PANEL_ID} .tm-credit-note {
+        font-size: 11px;
+        color: var(--tm-ink-soft);
+        opacity: 0.82;
+      }
+
+      #${PANEL_ID} .tm-credit-by {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+        color: var(--tm-ink-soft);
+        font-size: 12px;
+        font-weight: 600;
+        font-family: "Iowan Old Style", "Georgia", "Songti SC", "STSong", serif;
       }
 
       #${PANEL_ID} .tm-credit a {
-        color: var(--tm-ink);
+        color: var(--tm-ink-soft);
         font-size: 12px;
         font-weight: 600;
         text-decoration: none;
-        border-bottom: 1px solid var(--tm-line-strong);
-        padding-bottom: 1px;
+      }
+
+      #${PANEL_ID} .tm-credit a:hover {
+        color: var(--tm-ink);
       }
 
       #${PANEL_ID} .tm-drawer {
@@ -806,11 +805,12 @@
       <div class="tm-anchor-shell" aria-label="会话归档入口">
         <div class="tm-anchor-card">
           <button type="button" class="tm-anchor" data-action="toggle-panel" data-drag-handle="true" title="打开 Memo Capsule">
-            <span class="tm-anchor-kind" data-role="anchor-kind">Memo</span>
-            <span class="tm-anchor-copy" data-role="anchor-label">Memo</span>
+            <span class="tm-anchor-kind" data-role="anchor-kind">便签</span>
+            <span class="tm-anchor-copy" data-role="anchor-label"></span>
             <span class="tm-anchor-meta" data-role="anchor-meta"></span>
           </button>
-          <button type="button" class="tm-anchor-badge" data-action="save-current-inline" title="保存当前对话" aria-label="保存当前对话">↓</button>
+          <button type="button" class="tm-anchor-refresh" data-action="randomize-anchor" title="换一条随机书摘" aria-label="换一条随机书摘">↻</button>
+          <button type="button" class="tm-anchor-badge" data-action="hide-anchor" title="切回小猫" aria-label="切回小猫">→</button>
         </div>
         <div class="tm-cat-card">
           <button type="button" class="tm-cat-anchor" data-action="toggle-panel" data-drag-handle="true" title="打开 Memo Capsule">
@@ -826,7 +826,7 @@
           <button type="button" class="tm-drag" data-drag-handle="true" title="拖动位置">⋮⋮</button>
           <div class="tm-title">
             <strong>Memo Capsule</strong>
-            <span>保存 AI 对话，随手记点东西，偶尔翻到一句好书摘</span>
+            <span>存对话，记想法，翻书摘</span>
           </div>
           <button type="button" class="tm-ghost" data-action="collapse" title="收起">收起</button>
         </div>
@@ -837,19 +837,19 @@
         <div class="tm-note">
           <label for="${PANEL_ID}-note">折叠后显示</label>
           <textarea id="${PANEL_ID}-note" data-role="anchor-note-input" placeholder="随手记一笔，等下要问的、要做的"></textarea>
-          <div class="tm-note-actions">
-            <div class="tm-note-help"></div>
-            <button type="button" class="tm-secondary" data-action="save-note">保存</button>
-          </div>
           <div class="tm-note-links">
-            <button type="button" data-action="use-random-excerpt">换一条</button>
+            <button type="button" data-action="use-random-excerpt">换一条随机书摘</button>
             <span style="color:var(--tm-ink-soft);font-size:12px;user-select:none"> · </span>
             <button type="button" data-action="open-notes">便签记录</button>
+            <span style="color:var(--tm-ink-soft);font-size:12px;user-select:none"> · </span>
+            <button type="button" data-action="clear-anchor">清空</button>
+            <span class="tm-note-spacer"></span>
+            <button type="button" class="tm-secondary" data-action="save-note">保存</button>
           </div>
         </div>
-        <div class="tm-credit" style="display:flex;align-items:center;justify-content:space-between">
-          <a href="https://twitter.com/KingJing001" target="_blank" rel="noopener noreferrer">@一龙小包子</a>
-          <span style="font-size:11px;color:var(--tm-ink-soft);opacity:0.7">仅在你主动保存时获取对话内容</span>
+        <div class="tm-credit" style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <span class="tm-credit-note">所有数据仅存储在你的本地设备</span>
+          <span class="tm-credit-by">by <a href="https://twitter.com/KingJing001" target="_blank" rel="noopener noreferrer">@一龙小包子</a></span>
         </div>
       </section>
       <aside class="tm-drawer" aria-label="会话归档">
@@ -890,13 +890,24 @@
 
     panel.addEventListener('keydown', (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLTextAreaElement) || target.getAttribute('data-role') !== 'anchor-note-input') {
+
+      if (
+        target instanceof HTMLTextAreaElement &&
+        target.getAttribute('data-role') === 'anchor-note-input' &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key === 'Enter'
+      ) {
+        event.preventDefault();
+        const button = panel.querySelector('[data-action="save-note"]');
+        if (button instanceof HTMLButtonElement) {
+          button.click();
+        }
         return;
       }
 
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      if (target instanceof HTMLInputElement && target.getAttribute('data-role') === 'archive-title-input' && event.key === 'Enter') {
         event.preventDefault();
-        const button = panel.querySelector('[data-action="save-note"]');
+        const button = panel.querySelector('[data-action="archive-save-title"]');
         if (button instanceof HTMLButtonElement) {
           button.click();
         }
@@ -984,6 +995,42 @@
       return;
     }
 
+    if (action === 'hide-anchor') {
+      const state = await setPanelState({
+        anchorVisible: false,
+        collapsed: true,
+        drawerOpen: false,
+      });
+      applyPanelState(panel, state);
+      return;
+    }
+
+    if (action === 'randomize-anchor') {
+      const panelState = await getPanelState();
+      if (panelState.anchorType !== 'excerpt') {
+        return;
+      }
+
+      const excerpt = pickRandomExcerpt();
+      if (!excerpt) {
+        showToast('书摘还没有准备好。', true);
+        return;
+      }
+
+      const state = await setPanelState({
+        anchorText: excerpt.text,
+        anchorType: 'excerpt',
+        anchorMeta: buildExcerptMeta(excerpt),
+        anchorVisible: true,
+        currentNoteId: null,
+        collapsed: true,
+        drawerOpen: false,
+      });
+      applyPanelState(panel, state);
+      showToast('已切换书摘。');
+      return;
+    }
+
     if (action === 'save-note') {
       const input = panel.querySelector('[data-role="anchor-note-input"]');
       const nextText = normalizeText(input && 'value' in input ? input.value : '');
@@ -992,6 +1039,7 @@
           anchorText: '',
           anchorType: '',
           anchorMeta: '',
+          anchorVisible: false,
           currentNoteId: null,
           collapsed: true,
           drawerOpen: false,
@@ -1011,12 +1059,13 @@
         anchorText: item.text,
         anchorType: item.type,
         anchorMeta: buildAnchorMeta(item),
+        anchorVisible: true,
         currentNoteId: item.id,
         collapsed: true,
         drawerOpen: false,
       });
       applyPanelState(panel, state);
-      showToast('已更新便签。');
+      showToast(buildStorageNotice('便签', item.__count, item.__didReplace, '已更新便签。'));
       return;
     }
 
@@ -1030,13 +1079,33 @@
       const state = await setPanelState({
         anchorText: excerpt.text,
         anchorType: 'excerpt',
-        anchorMeta: excerpt.sourceLabel,
+        anchorMeta: buildExcerptMeta(excerpt),
+        anchorVisible: true,
         currentNoteId: null,
         collapsed: true,
         drawerOpen: false,
       });
       applyPanelState(panel, state);
       showToast('已切换书摘。');
+      return;
+    }
+
+    if (action === 'clear-anchor') {
+      const input = panel.querySelector('[data-role="anchor-note-input"]');
+      if (input && 'value' in input) {
+        input.value = '';
+      }
+      const state = await setPanelState({
+        anchorText: '',
+        anchorType: '',
+        anchorMeta: '',
+        anchorVisible: false,
+        currentNoteId: null,
+        collapsed: true,
+        drawerOpen: false,
+      });
+      applyPanelState(panel, state);
+      showToast('已清空折叠内容。');
       return;
     }
 
@@ -1076,6 +1145,29 @@
       await runButtonAction(actionTarget, async () => {
         await exportConversation(action === 'archive-export-txt' ? 'txt' : 'md', item);
       });
+      return;
+    }
+
+    if (action === 'archive-save-title') {
+      const itemId = actionTarget.getAttribute('data-id');
+      const input = panel.querySelector('[data-role="archive-title-input"]');
+      const nextTitle = sanitizeArchiveTitle(input && 'value' in input ? input.value : '');
+      if (!itemId || !nextTitle) {
+        showToast('标题不能为空。', true);
+        return;
+      }
+
+      await updateArchiveItem(itemId, (item) => ({
+        ...item,
+        title: nextTitle,
+        customTitle: true,
+        bundle: {
+          ...(item.bundle || {}),
+          title: nextTitle,
+        },
+      }));
+      await refreshDrawer(panel, { view: 'archive', preferredId: itemId });
+      showToast('已更新对话标题。');
       return;
     }
 
@@ -1168,6 +1260,7 @@
           anchorText: current.text,
           anchorType: current.type,
           anchorMeta: buildAnchorMeta(current),
+          anchorVisible: true,
           currentNoteId: current.id,
         });
         applyPanelState(panel, state);
@@ -1197,6 +1290,7 @@
           anchorText: '',
           anchorType: '',
           anchorMeta: '',
+          anchorVisible: false,
           currentNoteId: null,
         });
         applyPanelState(panel, state);
@@ -1238,10 +1332,12 @@
   async function saveCurrentConversation() {
     const bundle = collectConversation();
     const items = await getArchiveItems();
-    const item = buildArchiveItem(bundle);
+    const existingItem = items.find((entry) => entry.id === buildArchiveId(bundle)) || null;
+    const didReplaceOldest = items.length >= MAX_ARCHIVE_ITEMS && !existingItem;
+    const item = buildArchiveItem(bundle, existingItem);
     const nextItems = [item, ...items.filter((entry) => entry.id !== item.id)].slice(0, MAX_ARCHIVE_ITEMS);
     await setArchiveItems(nextItems);
-    showToast(`已保存到归档：${item.title}`);
+    showToast(buildStorageNotice('存档', nextItems.length, didReplaceOldest, `已保存到归档：${item.title}。`));
     return item;
   }
 
@@ -1352,7 +1448,7 @@
                   <div class="tm-note-row">
                     <button type="button" class="tm-select-toggle${selectedClass}" data-action="note-toggle-select" data-id="${escapeHtml(item.id)}">${runtimeState.selectedNoteIds.has(item.id) ? '✓' : '○'}</button>
                     <button type="button" class="tm-item${activeClass}" data-action="note-select" data-id="${escapeHtml(item.id)}">
-                      <div class="tm-item-title">Memo</div>
+                      <div class="tm-item-title">便签</div>
                       <div class="tm-item-meta">${escapeHtml(formatTimestamp(item.updatedAt || item.savedAt))}</div>
                       <div class="tm-item-excerpt">${escapeHtml(item.text || '')}</div>
                     </button>
@@ -1390,7 +1486,10 @@
     return `
       <div class="tm-detail-head">
         <div>
-          <strong>${escapeHtml(item.title)}</strong>
+          <div class="tm-title-editor">
+            <input type="text" class="tm-title-input" data-role="archive-title-input" value="${escapeHtml(item.title)}" placeholder="给这段对话起个名字" />
+            <button type="button" class="tm-secondary" data-action="archive-save-title" data-id="${escapeHtml(item.id)}">改名</button>
+          </div>
           <div class="tm-detail-meta">${escapeHtml(item.site)} · 保存于 ${escapeHtml(formatTimestamp(item.savedAt))}</div>
           <div class="tm-detail-meta">${escapeHtml(item.bundle && item.bundle.source ? item.bundle.source : '')}</div>
         </div>
@@ -1404,20 +1503,26 @@
     `;
   }
 
-  function buildArchiveItem(bundle) {
+  function buildArchiveItem(bundle, existingItem) {
     const id = buildArchiveId(bundle);
     const summarySource = bundle.messages
       .map((message) => message.text || message.markdown || '')
       .find((text) => normalizeText(text).length > 0) || '';
+    const fallbackTitle = sanitizeArchiveTitle(bundle.title) || '未命名对话';
+    const nextTitle = existingItem && existingItem.customTitle ? existingItem.title : fallbackTitle;
 
     return {
       id,
-      title: bundle.title || 'chat-session',
+      title: nextTitle,
+      customTitle: Boolean(existingItem && existingItem.customTitle),
       site: bundle.site || getSiteName(),
       source: bundle.source || window.location.href,
       savedAt: new Date().toISOString(),
       excerpt: buildArchiveExcerpt(summarySource),
-      bundle,
+      bundle: {
+        ...bundle,
+        title: nextTitle,
+      },
     };
   }
 
@@ -1439,7 +1544,7 @@
     return `
       <div class="tm-detail-head">
         <div>
-          <strong>Memo</strong>
+          <strong>便签</strong>
           <div class="tm-detail-meta">${escapeHtml(item.sourceLabel || '')}</div>
           <div class="tm-detail-meta">更新于 ${escapeHtml(formatTimestamp(item.updatedAt || item.savedAt))}</div>
         </div>
@@ -1462,6 +1567,12 @@
     await writePersistedValue(ARCHIVE_KEY, items);
   }
 
+  async function updateArchiveItem(itemId, updateFn) {
+    const items = await getArchiveItems();
+    const nextItems = items.map((item) => (item.id === itemId ? updateFn(item) : item));
+    await setArchiveItems(nextItems);
+  }
+
   async function getNoteItems() {
     const items = await readPersistedValue(NOTE_HISTORY_KEY, []);
     return Array.isArray(items) ? items : [];
@@ -1482,8 +1593,14 @@
       savedAt: now,
       updatedAt: now,
     };
-    await setNoteItems([item, ...items].slice(0, MAX_NOTE_ITEMS));
-    return item;
+    const willReplaceOldest = items.length >= MAX_NOTE_ITEMS;
+    const nextItems = [item, ...items].slice(0, MAX_NOTE_ITEMS);
+    await setNoteItems(nextItems);
+    return {
+      ...item,
+      __count: nextItems.length,
+      __didReplace: willReplaceOldest,
+    };
   }
 
   async function updateNoteItem(itemId, patch) {
@@ -1508,6 +1625,7 @@
       drawerView: 'archive',
       top: 112,
       right: 18,
+      anchorVisible: true,
       anchorText: '',
       anchorType: '',
       anchorMeta: '',
@@ -1535,7 +1653,9 @@
     panel.dataset.collapsed = state.collapsed ? 'true' : 'false';
     panel.dataset.drawerOpen = state.drawerOpen ? 'true' : 'false';
     panel.dataset.drawerView = state.drawerView || 'archive';
-    panel.dataset.anchorEmpty = normalizeText(state.anchorText || '').length > 0 ? 'false' : 'true';
+    panel.dataset.anchorType = state.anchorType || '';
+    panel.dataset.anchorEmpty =
+      normalizeText(state.anchorText || '').length > 0 && state.anchorVisible !== false ? 'false' : 'true';
     panel.style.top = `${Math.max(12, Number(state.top) || 112)}px`;
     panel.style.right = `${Math.max(12, Number(state.right) || 18)}px`;
 
@@ -1552,7 +1672,8 @@
       anchorLabel.title = nextAnchorText;
     }
     if (anchorKind) {
-      anchorKind.textContent = state.anchorType === 'excerpt' ? '小包子的书摘' : '便签';
+      anchorKind.textContent = state.anchorType === 'excerpt' ? '' : '便签';
+      anchorKind.style.display = state.anchorType === 'excerpt' ? 'none' : 'block';
     }
     if (anchorMeta) {
       anchorMeta.textContent = normalizeText(state.anchorMeta || '');
@@ -1560,7 +1681,7 @@
     }
     if (anchor) {
       anchor.title = nextAnchorText
-        ? `${state.anchorType === 'excerpt' ? '书摘' : '便签'}\n\n${nextAnchorText}`
+        ? `${state.anchorType === 'excerpt' ? EXCERPT_LABEL : '便签'}\n\n${nextAnchorText}`
         : '打开 Memo Capsule';
     }
     if (catButton) {
@@ -1568,9 +1689,9 @@
       catButton.setAttribute('aria-label', '打开 Memo Capsule');
     }
     if (saveButton) {
-      const saveTitle = '保存当前对话';
-      saveButton.title = saveTitle;
-      saveButton.setAttribute('aria-label', saveTitle);
+      const hideTitle = '切回小猫';
+      saveButton.title = hideTitle;
+      saveButton.setAttribute('aria-label', hideTitle);
     }
     if (catSaveButton) {
       const saveTitle = '保存当前对话';
@@ -1741,7 +1862,6 @@
     const root = document.querySelector(ROOT_SELECTOR) || document.body;
     const messages = extractMessages(root);
     const title = getConversationTitle();
-    const modelLabel = detectCurrentModelLabel();
 
     if (messages.length === 0) {
       const fallbackNode = root.cloneNode(true);
@@ -1755,7 +1875,6 @@
         title,
         source: window.location.href,
         site: getSiteName(),
-        modelLabel,
         exportedAt: new Date().toISOString(),
         messages: [{ role: 'conversation', markdown: fallbackText, text: fallbackText }],
       };
@@ -1765,7 +1884,6 @@
       title,
       source: window.location.href,
       site: getSiteName(),
-      modelLabel,
       exportedAt: new Date().toISOString(),
       messages,
     };
@@ -2355,10 +2473,6 @@
 
   function getRoleLabel(role, bundle) {
     const normalizedRole = normalizeRole(role);
-    if (normalizedRole === 'assistant') {
-      return bundle && bundle.modelLabel ? bundle.modelLabel : ROLE_LABELS.assistant;
-    }
-
     return ROLE_LABELS[normalizedRole] || ROLE_LABELS.assistant;
   }
 
@@ -2439,100 +2553,6 @@
     return host;
   }
 
-  function detectCurrentModelLabel() {
-    const host = window.location.hostname;
-    const candidates = collectModelCandidates();
-
-    if (host.includes('claude.ai')) {
-      return detectClaudeModelLabel(candidates) || 'AI';
-    }
-
-    if (host.includes('chatgpt.com') || host.includes('openai.com')) {
-      return detectChatGPTModelLabel(candidates) || 'AI';
-    }
-
-    if (host.includes('gemini.google.com')) {
-      return detectGeminiModelLabel(candidates) || 'AI';
-    }
-
-    return 'AI';
-  }
-
-  function collectModelCandidates() {
-    const selector = [
-      'header button',
-      'header [role="button"]',
-      'nav button',
-      'nav [role="button"]',
-      '[data-testid*="model"]',
-      '[aria-label*="model"]',
-      '[title*="model"]',
-      '[class*="model"]',
-    ].join(', ');
-
-    const values = new Set();
-    values.add(normalizeText(document.title || ''));
-
-    Array.from(document.querySelectorAll(selector))
-      .slice(0, 80)
-      .forEach((node) => {
-        const text = normalizeText(node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || '');
-        if (text && text.length <= 80) {
-          values.add(text);
-        }
-      });
-
-    return Array.from(values).filter(Boolean);
-  }
-
-  function detectChatGPTModelLabel(candidates) {
-    for (const text of candidates) {
-      const match = text.match(/\b(gpt)[-\s]?((?:\d+(?:\.\d+){0,2}|4o|4\.1|5(?:\.\d+){0,2}|o1|o3|o4)(?:\s*(?:mini|nano|pro|thinking|preview|high|low))?)\b/i);
-      if (match) {
-        return `GPT ${normalizeText(match[2]).replace(/-/g, ' ')}`;
-      }
-    }
-
-    return '';
-  }
-
-  function detectClaudeModelLabel(candidates) {
-    for (const text of candidates) {
-      const match = text.match(/\b(?:claude\s+)?((?:opus|sonnet|haiku)\s*\d+(?:\.\d+){0,2})\b/i);
-      if (match) {
-        return titleCaseWords(normalizeText(match[1]));
-      }
-    }
-
-    return '';
-  }
-
-  function detectGeminiModelLabel(candidates) {
-    for (const text of candidates) {
-      const modelMatch = text.match(/\b(\d+(?:\.\d+){0,2}\s*(?:pro|flash))\b/i);
-      if (modelMatch) {
-        return `Gemini ${titleCaseWords(normalizeText(modelMatch[1]))}`;
-      }
-
-      if (/\bgemini\b/i.test(text)) {
-        const variantMatch = text.match(/\bgemini\s+([a-z0-9.\s-]{1,24})\b/i);
-        if (variantMatch) {
-          return `Gemini ${titleCaseWords(normalizeText(variantMatch[1]).replace(/\s+model$/i, ''))}`;
-        }
-      }
-    }
-
-    return '';
-  }
-
-  function titleCaseWords(value) {
-    return normalizeText(value)
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-      .join(' ');
-  }
-
   function buildAnchorMeta(item) {
     if (!item) {
       return '';
@@ -2543,10 +2563,48 @@
 
   function getExcerptPool() {
     if (!getExcerptPool.cache) {
-      getExcerptPool.cache = parseWereadHighlights(BOOK_EXCERPT_SAMPLE_RAW);
+      const runtimeValue = globalThis[EXCERPT_DATA_KEY];
+      getExcerptPool.cache = Array.isArray(runtimeValue)
+        ? runtimeValue.map(normalizeExcerptItem).filter(Boolean)
+        : [];
     }
 
     return getExcerptPool.cache;
+  }
+
+  function normalizeExcerptItem(item) {
+    if (!item || typeof item !== 'object') {
+      return null;
+    }
+
+    const text = normalizeText(item.text || '');
+    if (!text) {
+      return null;
+    }
+
+    return {
+      text,
+      book: normalizeExcerptBook(item.book || ''),
+      author: normalizeExcerptAuthor(item.author || ''),
+    };
+  }
+
+  function buildExcerptMeta(item) {
+    if (!item) {
+      return '';
+    }
+
+    return [normalizeText(item.book || ''), normalizeText(item.author || '')].filter(Boolean).join(' · ');
+  }
+
+  function normalizeExcerptBook(value) {
+    return normalizeText(value).replace(/[《》]/g, '');
+  }
+
+  function normalizeExcerptAuthor(value) {
+    return normalizeText(value)
+      .replace(/^\[[^\]]+\]\s*/g, '')
+      .replace(/^[（(][^）)]+[）)]\s*/g, '');
   }
 
   function pickRandomExcerpt() {
@@ -2558,78 +2616,6 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
-  function parseWereadHighlights(raw) {
-    const lines = String(raw || '').split(/\r?\n/);
-    const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
-    const book = nonEmpty[0] || '未命名书摘';
-    const author = nonEmpty[1] && !/个笔记/.test(nonEmpty[1]) ? nonEmpty[1] : '';
-    const items = [];
-    let section = '';
-    let current = null;
-
-    const pushCurrent = () => {
-      if (!current) {
-        return;
-      }
-
-      const text = current.parts
-        .join('\n')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-
-      if (text) {
-        items.push({
-          text,
-          sourceLabel: [compactBookTitle(book), current.section].filter(Boolean).join(' · '),
-        });
-      }
-
-      current = null;
-    };
-
-    lines.forEach((line) => {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        if (current && current.parts[current.parts.length - 1] !== '') {
-          current.parts.push('');
-        }
-        return;
-      }
-
-      if (/^--\s*来自微信读书/.test(trimmed) || /^\d+个笔记$/.test(trimmed) || trimmed === book || trimmed === author) {
-        return;
-      }
-
-      if (/^(推荐序|第.+章)/.test(trimmed)) {
-        pushCurrent();
-        section = trimmed;
-        return;
-      }
-
-      if (/^◆\s*/.test(trimmed)) {
-        pushCurrent();
-        current = {
-          section,
-          parts: [trimmed.replace(/^◆\s*/, '').trim()],
-        };
-        return;
-      }
-
-      if (current) {
-        current.parts.push(trimmed);
-      }
-    });
-
-    pushCurrent();
-    return items;
-  }
-
-  function compactBookTitle(value) {
-    const title = String(value || '').replace(/[《》]/g, '');
-    const shortTitle = title.split('：')[0] || title;
-    return shortTitle ? `《${shortTitle}》` : '';
-  }
-
   function exportNotes(format, items) {
     const content = format === 'txt' ? buildNotesText(items) : buildNotesMarkdown(items);
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -2638,22 +2624,22 @@
   }
 
   function buildNotesMarkdown(items) {
-    const header = ['# Memo Notes', '', `- Exported: ${new Date().toISOString()}`, ''].join('\n');
+    const header = ['# 便签记录', '', `- Exported: ${new Date().toISOString()}`, ''].join('\n');
     const body = items
       .map((item) => {
         const meta = [item.sourceLabel || '', formatTimestamp(item.updatedAt || item.savedAt)].filter(Boolean).join(' · ');
-        return `## Memo\n\n- ${meta}\n\n${item.text}`;
+        return `## 便签\n\n- ${meta}\n\n${item.text}`;
       })
       .join('\n\n');
     return `${header}${body}\n`;
   }
 
   function buildNotesText(items) {
-    const header = ['Memo Notes', `Exported: ${new Date().toISOString()}`, ''].join('\n');
+    const header = ['便签记录', `Exported: ${new Date().toISOString()}`, ''].join('\n');
     const body = items
       .map((item) => {
         const meta = [item.sourceLabel || '', formatTimestamp(item.updatedAt || item.savedAt)].filter(Boolean).join(' · ');
-        return `[Memo] ${meta}\n${item.text}`;
+        return `[便签] ${meta}\n${item.text}`;
       })
       .join('\n\n');
     return `${header}${body}\n`;
@@ -2700,8 +2686,24 @@
 
   function buildFilename(title, extension) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeTitle = sanitizeFilename(title).slice(0, 80) || 'chat-session';
+    const safeTitle = sanitizeFilename(title).slice(0, 80) || 'memo-capsule';
     return `${safeTitle}-${getSiteName().toLowerCase()}-${stamp}.${extension}`;
+  }
+
+  function sanitizeArchiveTitle(value) {
+    return normalizeText(value).slice(0, 80);
+  }
+
+  function buildStorageNotice(kind, count, didReplace, prefix) {
+    if (didReplace) {
+      return `${prefix}已达上限，最早一条${kind}已被替换。`;
+    }
+
+    if (count >= STORAGE_WARNING_THRESHOLD) {
+      return `${prefix}本地${kind}${count}/${kind === '存档' ? MAX_ARCHIVE_ITEMS : MAX_NOTE_ITEMS} 条，建议导出后清理。`;
+    }
+
+    return prefix;
   }
 
   function downloadFile(filename, content) {
