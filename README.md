@@ -2,7 +2,9 @@
 
 ![Memo Capsule](assets/github-cover.png)
 
-存下对话，记住想法，留住自己。
+![Memo Capsule doc](assets/readme-doc.png)
+
+[给自己写了个插件，一键保存 AI 聊天记录且随机展示一条微信读书书摘](https://mp.weixin.qq.com/s/Btp0t1Sjf_aW2h_XaGcKRQ)
 
 ---
 
